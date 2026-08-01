@@ -1,0 +1,1661 @@
+<!DOCTYPE html>
+<html lang="ko">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+<title>실시간 통역 PWA (연속 스트리밍 수정판)</title>
+<meta name="theme-color" content="#0d1117">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="통역앱">
+<link rel="apple-touch-icon" href="data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' viewBox='0 0 180 180'%3E%3Crect width='180' height='180' rx='40' fill='%232f81f7'/%3E%3Ctext x='90' y='120' font-size='90' text-anchor='middle' fill='white'%3E%F0%9F%8E%99%EF%B8%8F%3C/text%3E%3C/svg%3E">
+<style>
+  * { box-sizing: border-box; -webkit-tap-highlight-color: transparent; }
+  :root{
+    --bg:#0d1117; --panel:#161b22; --panel2:#1c2333; --line:#2d333b;
+    --accent:#2f81f7; --accent2:#238636; --danger:#da3633; --warn:#d29922;
+    --txt:#e6edf3; --sub:#8b949e;
+    --vh: 1vh;
+  }
+  html,body{margin:0;background:var(--bg);color:var(--txt);
+    font-family:-apple-system,"Segoe UI",Roboto,"Noto Sans KR",sans-serif;}
+
+  body{
+    display:flex;flex-direction:column;overflow:hidden;
+    height:100vh;
+    height:calc(var(--vh, 1vh) * 100);
+    height:100dvh;
+    min-height:0;
+  }
+
+  header{padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);
+    display:flex;align-items:center;gap:8px;flex-wrap:wrap;flex:none;
+    padding-top:calc(8px + env(safe-area-inset-top));}
+  header h1{font-size:14px;margin:0;font-weight:700;flex:1;min-width:110px;}
+  .badge{font-size:11px;color:var(--sub);border:1px solid var(--line);
+    padding:2px 6px;border-radius:20px;}
+  .badge.eng{color:var(--accent);border-color:var(--accent);cursor:pointer;}
+  .dot{width:9px;height:9px;border-radius:50%;background:#555;display:inline-block;}
+  .dot.on{background:var(--accent2);box-shadow:0 0 8px var(--accent2);animation:pulse 1.4s infinite;}
+  .dot.duck{background:var(--warn);box-shadow:0 0 8px var(--warn);animation:none;}
+  @keyframes pulse{50%{opacity:.4;}}
+
+  .langbar{display:flex;gap:6px;padding:8px 12px;background:var(--panel2);
+    border-bottom:1px solid var(--line);align-items:center;flex-wrap:wrap;flex:none;}
+  .langbar label{font-size:11px;color:var(--sub);}
+  select{background:var(--panel);color:var(--txt);border:1px solid var(--line);
+    border-radius:8px;padding:8px 10px;font-size:14px;flex:1;min-width:90px;}
+  .swap{background:var(--panel);border:1px solid var(--line);color:var(--accent);
+    border-radius:8px;width:42px;height:40px;font-size:18px;flex:none;}
+
+  #log{flex:1 1 auto;min-height:0;overflow-y:auto;-webkit-overflow-scrolling:touch;
+    padding:12px;display:flex;flex-direction:column;gap:10px;}
+  .msg{border-radius:14px;padding:10px 12px;max-width:92%;line-height:1.45;
+    animation:fade .25s ease;word-break:break-word;}
+  @keyframes fade{from{opacity:0;transform:translateY(6px);}}
+  .msg.src{align-self:flex-start;background:var(--panel);border:1px solid var(--line);}
+  .msg.dst{align-self:flex-end;background:#12233f;border:1px solid #1d3a63;}
+  .msg .lbl{font-size:10px;color:var(--sub);margin-bottom:3px;
+    display:flex;justify-content:space-between;gap:8px;align-items:center;}
+  .msg .orig{font-size:var(--fs,17px);}
+  .msg .tr{font-size:calc(var(--fs,17px) + 1px);color:#7fb2ff;margin-top:5px;
+    font-weight:600;border-top:1px dashed var(--line);padding-top:5px;white-space:pre-wrap;}
+  .msg .tr.pending{color:var(--sub);font-weight:400;font-style:italic;}
+  .msg .tr.fail{color:#ff8080;}
+  .msg .gtag{display:inline-block;font-size:10px;color:var(--warn);margin-left:6px;}
+  .msg .etag{display:inline-block;font-size:9px;color:var(--sub);margin-left:6px;
+    border:1px solid var(--line);border-radius:10px;padding:1px 5px;}
+  .interim{opacity:.62;border-style:dashed;}
+  .interim .orig{font-style:italic;}
+  .speak{background:none;border:none;color:var(--sub);font-size:14px;cursor:pointer;}
+
+  .empty{color:var(--sub);text-align:center;margin:auto;font-size:14px;line-height:1.7;}
+
+  footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 12px;flex:none;
+    padding-bottom:calc(8px + env(safe-area-inset-bottom));}
+  .row{display:flex;gap:8px;align-items:center;}
+  .mic{flex:1;height:54px;border:none;border-radius:14px;font-size:16px;font-weight:700;
+    color:#fff;background:var(--accent2);transition:.15s;}
+  .mic.rec{background:var(--danger);animation:rec 1.2s infinite;}
+  @keyframes rec{50%{box-shadow:0 0 0 8px rgba(218,54,51,.25);}}
+  .mic:disabled{opacity:.5;}
+  .iconbtn{width:50px;height:54px;border:1px solid var(--line);background:var(--panel2);
+    color:var(--txt);border-radius:14px;font-size:20px;}
+  .toolrow{display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-top:7px;}
+  .tool{background:var(--panel2);border:1px solid var(--line);
+    color:var(--txt);border-radius:10px;padding:8px 3px;font-size:11px;}
+  .tool.active{border-color:var(--accent);color:var(--accent);}
+
+  #perm{display:none;background:#3a2a12;border:1px solid var(--warn);color:#ffd88a;
+    margin:10px 12px;padding:12px;border-radius:12px;font-size:13px;line-height:1.6;}
+  #perm b{color:#ffe9c2;}
+  #perm button{margin-top:8px;background:var(--warn);color:#111;border:none;
+    padding:8px 14px;border-radius:8px;font-weight:700;}
+
+  #install{display:none;background:#0f2a17;border:1px solid var(--accent2);color:#9be3ad;
+    margin:10px 12px 0;padding:11px 12px;border-radius:12px;font-size:13px;
+    align-items:center;justify-content:space-between;gap:10px;}
+  #install button{background:var(--accent2);color:#fff;border:none;padding:8px 14px;
+    border-radius:8px;font-weight:700;white-space:nowrap;}
+  #install .x{background:none;color:#9be3ad;padding:4px 8px;}
+
+  #toast{position:fixed;left:50%;transform:translateX(-50%);
+    bottom:calc(130px + env(safe-area-inset-bottom));
+    background:#000c;border:1px solid var(--line);color:#fff;padding:10px 16px;
+    border-radius:20px;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:99;
+    max-width:90%;text-align:center;}
+  #toast.show{opacity:1;}
+
+  .modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;
+    justify-content:center;z-index:50;padding:16px;}
+  .modal.show{display:flex;}
+  .sheet{background:var(--panel);border:1px solid var(--line);border-radius:16px;
+    padding:18px;max-width:560px;width:100%;max-height:85dvh;overflow:auto;
+    -webkit-overflow-scrolling:touch;}
+  .sheet h2{margin:0 0 10px;font-size:16px;}
+  .sheet h3{margin:16px 0 6px;font-size:13px;color:var(--txt);}
+  .sheet p,.sheet li{font-size:13px;color:var(--sub);line-height:1.7;}
+  .sheet .kv{display:flex;justify-content:space-between;padding:8px 0;border-bottom:1px solid var(--line);align-items:center;gap:10px;}
+  .sheet .kv span:first-child{color:var(--txt);font-size:14px;}
+  .sheet .kv small{display:block;color:var(--sub);font-size:11px;font-weight:400;margin-top:2px;}
+  .close{width:100%;margin-top:14px;background:var(--accent);color:#fff;border:none;
+    padding:12px;border-radius:10px;font-weight:700;font-size:15px;}
+  .toggle{width:46px;height:26px;border-radius:20px;background:var(--line);position:relative;border:none;flex:none;}
+  .toggle.on{background:var(--accent2);}
+  .toggle::after{content:"";position:absolute;top:3px;left:3px;width:20px;height:20px;
+    border-radius:50%;background:#fff;transition:.2s;}
+  .toggle.on::after{left:23px;}
+  .exportbtn{background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:10px;padding:11px;font-size:14px;width:100%;margin-top:8px;text-align:left;}
+  .exportbtn b{color:var(--accent);}
+  .summary{background:var(--panel2);border:1px solid var(--line);border-radius:10px;
+    padding:12px;font-size:13px;line-height:1.7;white-space:pre-wrap;color:var(--txt);max-height:220px;overflow:auto;}
+  .diag{background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:10px;
+    font-size:12px;font-family:monospace;color:#9be3ad;line-height:1.6;white-space:pre-wrap;}
+
+  .slider{width:100%;margin-top:4px;}
+  .sliderlbl{display:flex;justify-content:space-between;font-size:12px;color:var(--sub);margin-top:10px;}
+  .sliderlbl b{color:var(--accent);}
+
+  .engcard{border:1px solid var(--line);border-radius:12px;padding:12px;margin-top:10px;}
+  .engcard.sel{border-color:var(--accent);background:#12233f;}
+  .engcard .top{display:flex;align-items:center;gap:8px;}
+  .engcard input[type=radio]{width:18px;height:18px;accent-color:var(--accent);}
+  .engcard .name{font-size:14px;font-weight:700;color:var(--txt);}
+  .engcard .tagq{font-size:10px;padding:1px 6px;border-radius:10px;margin-left:auto;}
+  .tagq.best{background:#0f2a17;color:#7ee2a0;border:1px solid var(--accent2);}
+  .tagq.good{background:#12233f;color:#7fb2ff;border:1px solid var(--accent);}
+  .tagq.free{background:#3a2a12;color:#ffd88a;border:1px solid var(--warn);}
+  .engcard .desc{font-size:11px;color:var(--sub);margin:6px 0 0;line-height:1.5;}
+  .keyin{width:100%;margin-top:8px;background:var(--bg);color:var(--txt);
+    border:1px solid var(--line);border-radius:8px;padding:9px;font-size:13px;font-family:monospace;}
+  .keyrow{display:flex;gap:6px;margin-top:6px;}
+  .keyrow button{flex:none;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:8px;padding:8px 12px;font-size:12px;}
+  .keyrow button.test{color:var(--accent);border-color:var(--accent);}
+  .keystat{font-size:11px;margin-top:6px;}
+  .keystat.ok{color:#7ee2a0;} .keystat.err{color:#ff8080;}
+
+  details.guide{border:1px solid var(--line);border-radius:10px;padding:0;margin-top:8px;overflow:hidden;}
+  details.guide>summary{padding:11px 12px;cursor:pointer;font-size:13px;font-weight:700;
+    color:var(--txt);background:var(--panel2);list-style:none;}
+  details.guide>summary::-webkit-details-marker{display:none;}
+  details.guide[open]>summary{border-bottom:1px solid var(--line);}
+  details.guide .body{padding:12px;}
+  .step{display:flex;gap:10px;margin-bottom:12px;align-items:flex-start;}
+  .step .n{flex:none;width:24px;height:24px;border-radius:50%;background:var(--accent);
+    color:#fff;font-size:12px;font-weight:700;display:flex;align-items:center;justify-content:center;}
+  .step .t{font-size:12.5px;color:var(--sub);line-height:1.65;}
+  .step .t b{color:var(--txt);}
+  code{background:#0b0f14;border:1px solid var(--line);border-radius:5px;padding:1px 6px;
+    font-size:11.5px;color:#9be3ad;font-family:monospace;word-break:break-all;}
+  pre.codeblock{background:#0b0f14;border:1px solid var(--line);border-radius:8px;padding:12px;
+    font-size:11px;color:#9be3ad;font-family:monospace;line-height:1.55;overflow-x:auto;white-space:pre;margin:8px 0;}
+  .copybtn{background:var(--accent);color:#fff;border:none;border-radius:8px;padding:8px 14px;
+    font-size:12px;font-weight:700;margin-top:4px;}
+  .link{color:var(--accent);text-decoration:underline;word-break:break-all;}
+  .note{background:#0f2a17;border:1px solid var(--accent2);border-radius:8px;padding:9px 11px;
+    font-size:11.5px;color:#9be3ad;line-height:1.6;margin-top:8px;}
+  .note.warn{background:#3a2a12;border-color:var(--warn);color:#ffd88a;}
+  .note.info{background:#12233f;border-color:var(--accent);color:#9dc3ff;}
+  .fixbox{background:#0f2a17;border:1px solid var(--accent2);border-radius:10px;padding:12px;
+    margin-top:10px;font-size:12px;color:#9be3ad;line-height:1.7;}
+  .fixbox b{color:#7ee2a0;}
+</style>
+</head>
+<body>
+
+<header>
+  <span class="dot" id="statusDot"></span>
+  <h1>실시간 통역 · 체코·영어·한국어</h1>
+  <span class="badge eng" id="engBadge">🌐 무료</span>
+  <span class="badge" id="cntBadge">0건</span>
+</header>
+
+<div class="langbar">
+  <label>말하는 언어</label>
+  <select id="srcLang">
+    <option value="ko-KR" data-t="ko">🇰🇷 한국어</option>
+    <option value="cs-CZ" data-t="cs">🇨🇿 체코어</option>
+    <option value="en-US" data-t="en">🇬🇧 영어</option>
+  </select>
+  <button class="swap" id="swapBtn" title="언어 교체">⇄</button>
+  <label>통역 언어</label>
+  <select id="dstLang">
+    <option value="cs" data-l="cs-CZ">🇨🇿 체코어</option>
+    <option value="en" data-l="en-US">🇬🇧 영어</option>
+    <option value="ko" data-l="ko-KR">🇰🇷 한국어</option>
+  </select>
+</div>
+
+<div id="install">
+  <span>📲 홈 화면에 설치하면 앱처럼 오프라인에서도 실행됩니다.</span>
+  <div style="display:flex;gap:6px;">
+    <button id="installBtn">설치</button>
+    <button class="x" id="installClose">✕</button>
+  </div>
+</div>
+
+<div id="perm">
+  <b>🎤 마이크 권한이 필요합니다.</b><br>
+  <b>안드로이드 Chrome / 삼성인터넷에서 권한이 막힌 경우:</b>
+  <br>① 주소창 왼쪽 <b>🔒 자물쇠</b> → 권한 → 마이크 <b>허용</b>
+  <br>② 설정 → 앱 → Chrome → 권한 → 마이크 <b>허용</b>
+  <br>③ 사이트는 <b>반드시 https 주소</b> 또는 <b>홈 화면 설치 앱</b>에서 열어야 합니다.
+  <br>④ 아래 <b>권한 다시 요청</b>을 <u>화면을 직접 탭한 직후</u> 눌러 주세요.
+  <button id="permBtn">권한 다시 요청</button>
+</div>
+
+<div id="log">
+  <div class="empty" id="emptyMsg">
+    🎙️ 아래 <b>말하기</b> 버튼을 누르고 말하면<br>실시간으로 통역됩니다.<br><br>
+    <b style="color:var(--accent2)">✅ 연속 스트리밍 수정판</b><br>
+    ① <b>발화 유실 제거</b> — 번역 중에도 다음 말을 계속 수신<br>
+    ② <b>조기 끊김 제거</b> — 무음·문장부호 기준으로만 문장 확정<br>
+    ③ <b>TTS 되먹임 차단</b> — 음성 출력 중 마이크 자동 차단<br>
+    ④ <b>세션 자동 부활</b> — 안드로이드가 인식을 끊어도 즉시 복구<br>
+    ⑤ 하단 버튼 화면잘림 수정(100dvh + 안전영역) 유지<br><br>
+    두코바니 폐수처리 용어집 자동 보정 · <b>DeepL / Google + Cloudflare 프록시</b>
+  </div>
+</div>
+
+<footer>
+  <div class="row">
+    <button class="iconbtn" id="settingsBtn" title="설정">⚙️</button>
+    <button class="mic" id="micBtn">🎤 말하기 시작</button>
+    <button class="iconbtn" id="clearBtn" title="지우기">🗑️</button>
+  </div>
+  <div class="toolrow">
+    <button class="tool" id="previewBtn">👁 미리보기</button>
+    <button class="tool" id="ttsBtn">🔊 음성출력</button>
+    <button class="tool" id="wakeBtn">💡 화면유지</button>
+    <button class="tool" id="recordBtn">📋 기록</button>
+    <button class="tool" id="deployBtn">📖 배포</button>
+    <button class="tool" id="bigBtn">🔠 큰글씨</button>
+  </div>
+</footer>
+
+<!-- 설정 모달 -->
+<div class="modal" id="settingsModal">
+  <div class="sheet">
+    <h2>⚙️ 설정</h2>
+
+    <h3>🎙️ 연속 인식 튜닝 (핵심)</h3>
+    <div class="sliderlbl"><span>문장 확정 대기시간 (무음)</span><b id="silLbl">1000ms</b></div>
+    <input type="range" class="slider" id="silRange" min="500" max="2500" step="100" value="1000">
+    <p style="margin:4px 0 0">값이 <b>클수록</b> 문장을 끝까지 기다립니다(끊김 감소, 지연 증가). 말이 자꾸 잘리면 <b>1400~1800</b>으로 올리세요.</p>
+
+    <div class="sliderlbl"><span>최대 누적 길이 (강제 확정)</span><b id="hardLbl">180자</b></div>
+    <input type="range" class="slider" id="hardRange" min="60" max="400" step="20" value="180">
+
+    <div class="kv" style="margin-top:10px"><span>🔇 음성출력 중 마이크 차단<small>끄면 스피커 소리를 다시 인식해 무한 반복이 발생합니다</small></span><button class="toggle" data-s="duck"></button></div>
+    <div class="kv"><span>👁 실시간 미리보기 번역<small>말하는 도중 임시 번역 표시 (API 사용량 증가)</small></span><button class="toggle" data-s="preview"></button></div>
+    <div class="kv"><span>🚫 중복 문장 자동 차단</span><button class="toggle" data-s="dedup"></button></div>
+    <div class="note info">이 앱은 안드로이드가 3~5초마다 인식 세션을 강제 종료해도 <b>버퍼를 유지한 채 즉시 세션을 재시작</b>합니다. 따라서 세션 종료는 문장의 끝이 아니며, 문장 확정은 위 무음 시간·문장부호·최대 길이로만 판단합니다.</div>
+
+    <h3>🌐 번역 엔진 (기술 통역 정확도 향상)</h3>
+
+    <div class="engcard" data-eng="free">
+      <div class="top">
+        <input type="radio" name="eng" value="free" id="engFree">
+        <span class="name">무료 (MyMemory)</span>
+        <span class="tagq free">무료·키불필요</span>
+      </div>
+      <p class="desc">키 없이 바로 사용. 일반 대화는 가능하나 전문 기술 용어 정확도는 낮습니다. 하루 요청량 제한이 있어 미리보기는 자동으로 꺼집니다.</p>
+    </div>
+
+    <div class="engcard" data-eng="deepl">
+      <div class="top">
+        <input type="radio" name="eng" value="deepl" id="engDeepl">
+        <span class="name">DeepL</span>
+        <span class="tagq best">최고 정확도</span>
+      </div>
+      <p class="desc">유럽어(체코어·영어) 번역 품질 업계 최고 수준. 기술·계약 문서 통역에 강력 추천. <b>DeepL API Free</b>는 월 50만 자 무료.</p>
+      <input class="keyin" id="deeplKey" type="password" placeholder="DeepL API 키 (예: xxxx:fx)" autocomplete="off">
+      <div class="keyrow">
+        <button id="deeplShow">👁 보기</button>
+        <button class="test" id="deeplTest">🔍 키 테스트</button>
+      </div>
+      <div class="keystat" id="deeplStat"></div>
+    </div>
+
+    <div class="engcard" data-eng="google">
+      <div class="top">
+        <input type="radio" name="eng" value="google" id="engGoogle">
+        <span class="name">Google 번역</span>
+        <span class="tagq good">넓은 언어폭</span>
+      </div>
+      <p class="desc">Google Cloud Translation API. 한국어↔체코어 등 폭넓은 언어 조합에 안정적. 월 50만 자 무료 크레딧 제공.</p>
+      <input class="keyin" id="googleKey" type="password" placeholder="Google Cloud API 키" autocomplete="off">
+      <div class="keyrow">
+        <button id="googleShow">👁 보기</button>
+        <button class="test" id="googleTest">🔍 키 테스트</button>
+      </div>
+      <div class="keystat" id="googleStat"></div>
+    </div>
+
+    <h3>🛡️ Cloudflare 프록시 (CORS 완전 해결)</h3>
+    <p style="margin-top:2px">DeepL은 브라우저 직접 호출 시 CORS로 막힙니다. Cloudflare Workers 프록시 URL을 등록하면 <b>CORS 없이</b> 안전하게 호출됩니다. (아래 📖배포 → Cloudflare 코드 참고)</p>
+    <input class="keyin" id="proxyUrl" type="text" placeholder="https://내프록시.내계정.workers.dev" autocomplete="off">
+    <div class="keyrow">
+      <button class="test" id="proxyTest">🔍 프록시 연결 테스트</button>
+      <button id="proxyClear">지우기</button>
+    </div>
+    <div class="keystat" id="proxyStat"></div>
+    <div class="kv" style="margin-top:8px"><span>프록시 경유로 호출 (권장)</span><button class="toggle" data-s="useProxy"></button></div>
+    <div class="note info">프록시를 켜면 DeepL·Google 요청이 모두 프록시를 거쳐 나갑니다. API 키는 <b>이 앱 → 프록시</b> 요청 헤더로 전달되며 프록시는 그대로 API에 중계만 합니다. (키를 Worker에 심어두는 안전한 방식도 배포 가이드에 포함)</div>
+
+    <div class="note warn">🔒 API 키·프록시 URL은 이 기기의 <b>브라우저(localStorage)에만</b> 저장됩니다. 공용 PC에서는 사용 후 삭제하세요.</div>
+
+    <h3>⚙️ 기타 옵션</h3>
+    <div class="kv"><span>통역 결과 음성 읽기(TTS)</span><button class="toggle" data-s="tts"></button></div>
+    <div class="kv"><span>화면 항상 켜기</span><button class="toggle" data-s="wake"></button></div>
+    <div class="kv"><span>큰 자막 모드</span><button class="toggle" data-s="big"></button></div>
+    <div class="kv"><span>두코바니 용어집 자동 보정</span><button class="toggle" data-s="glossary"></button></div>
+    <div class="kv"><span>용어집을 API에 힌트로 전달</span><button class="toggle" data-s="glossaryHint"></button></div>
+
+    <h3>글자 크기</h3>
+    <input type="range" id="fsRange" min="15" max="30" value="17" style="width:100%">
+
+    <h3>🎤 상태 진단</h3>
+    <div class="diag" id="diag">진단 정보를 불러오는 중…</div>
+    <button class="exportbtn" id="testMicBtn" style="text-align:center"><b>🔍 마이크 권한 테스트 (스트림 즉시 해제)</b></button>
+
+    <h3>📘 등록된 전문 용어집</h3>
+    <p id="glossaryCount">-</p>
+    <p style="margin:0">두코바니 발전소 폐수처리 계통(WC 냉각수·ST 증기·WW 폐수·BS 붕산·BT 처리·WS 급수) 용어를 한↔영↔체코 3방향으로 자동 보정합니다.</p>
+
+    <button class="close" id="closeSet">닫기</button>
+  </div>
+</div>
+
+<!-- 배포 가이드 모달 -->
+<div class="modal" id="deployModal">
+  <div class="sheet">
+    <h2>📖 배포 & 연속 인식 문제 해결</h2>
+
+    <div class="fixbox"><b>🔧 "통역이 반복되거나 말을 끝까지 못 듣던" 원인과 수정</b><br><br>
+    <b>원인 ① 번역 중 발화 유실</b><br>
+    이전 버전은 <code>processingLock</code>으로 번역 API 응답을 기다리는 동안 들어온 문장을 <b>버렸습니다</b>. → 락을 제거하고 문장별 비동기 처리로 변경했습니다.<br><br>
+    <b>원인 ② isFinal을 문장 끝으로 오인</b><br>
+    안드로이드에서 <code>isFinal</code>/<code>onend</code>는 "말이 끝났다"가 아니라 <b>무음 3~5초 타임아웃</b>입니다. → 이제 세션 종료 시 <b>번역을 확정하지 않고</b> 버퍼를 유지한 채 재시작만 하며, 확정은 무음 타이머·문장부호·최대 길이로만 판단합니다.<br><br>
+    <b>원인 ③ TTS 되먹임 루프</b><br>
+    번역 음성이 스피커 → 마이크로 재입력되어 재인식·재번역되었습니다. → 음성 출력 중 마이크를 자동 차단합니다.<br><br>
+    <b>원인 ⑤ 누적형 인식 결과 (같은 말 4~6회 반복의 진짜 원인)</b><br>
+    안드로이드는 <code>results[0]="나는"</code>, <code>results[1]="나는 오늘"</code>, <code>results[2]="나는 오늘 공룡"</code> 처럼 <b>매번 전체 문장을 다시</b> 담아 보냅니다. 인덱스 기준으로 새 결과만 이어붙이면 계단식으로 중복됩니다. → 이제 인덱스가 아니라 <b>단어 겹침(overlap) 병합</b>으로 처리하며, 세션 간 재전달 제거와 반복 블록 축약 안전망을 함께 적용합니다.<br><br>
+    <b>원인 ④ 좀비 세션</b><br>
+    안드로이드가 <code>onend</code> 없이 인식을 죽이는 경우가 있습니다. → 3초 주기 워치독이 감지해 부활시킵니다.</div>
+
+    <h3>🛡️ Cloudflare Workers 무료 프록시 (DeepL/Google CORS 완전 해결)</h3>
+    <p>DeepL API는 CORS 헤더를 주지 않아 브라우저에서 직접 호출하면 실패합니다. 아래 Worker 하나로 <b>DeepL·Google 모두</b> 프록시하여 CORS를 완전히 없앱니다.</p>
+
+    <details class="guide" open>
+      <summary>① Cloudflare Worker 배포 (5분)</summary>
+      <div class="body">
+        <div class="step"><div class="n">1</div><div class="t"><span class="link">dash.cloudflare.com</span> 가입 → 좌측 <b>Workers &amp; Pages</b> → <b>Create → Create Worker</b></div></div>
+        <div class="step"><div class="n">2</div><div class="t">이름 지정(예: <code>translate-proxy</code>) → <b>Deploy</b> → <b>Edit code</b></div></div>
+        <div class="step"><div class="n">3</div><div class="t">기본 코드를 모두 지우고 아래 코드를 붙여넣기 → <b>Deploy</b></div></div>
+        <div class="step"><div class="n">4</div><div class="t">생성된 <code>https://translate-proxy.내계정.workers.dev</code> 주소를 복사 → 설정의 <b>프록시 URL</b>에 붙여넣고 토글 ON</div></div>
+      </div>
+    </details>
+
+    <h3>📄 Worker 코드 (개선판 — 타임아웃·오류전달 추가)</h3>
+    <pre class="codeblock" id="workerCode">// ===== Cloudflare Workers · DeepL/Google 번역 프록시 (개선판) =====
+// 개선점
+//  1. AbortSignal.timeout 으로 업스트림 타임아웃 (앱이 무한 대기하지 않음)
+//  2. 업스트림 오류 상태코드/본문 전달 (429 쿼터초과 등 진단 가능)
+//  3. DeepL split_sentences=nonewlines / preserve_formatting=1
+//     → 실시간 조각 번역 시 문장이 임의로 쪼개지지 않음
+//  4. 빈 문자열·동일 언어 조기 반환으로 쿼터 절약
+const DEEPL_KEY  = "";   // 예: "xxxxxxxx:fx"  (비우면 앱이 보낸 키 사용)
+const GOOGLE_KEY = "";   // 예: "AIzaSy..."    (비우면 앱이 보낸 키 사용)
+
+const UPSTREAM_TIMEOUT_MS = 7000;
+const MAX_TEXT_LEN = 5000;
+
+export default {
+  async fetch(request) {
+    const cors = {
+      "Access-Control-Allow-Origin": "*",
+      "Access-Control-Allow-Methods": "GET,POST,OPTIONS",
+      "Access-Control-Allow-Headers": "Content-Type,Authorization,X-Api-Key",
+      "Access-Control-Max-Age": "86400",
+    };
+    if (request.method === "OPTIONS")
+      return new Response(null, { headers: cors });
+
+    const url = new URL(request.url);
+    if (request.method === "GET" &amp;&amp; url.pathname === "/")
+      return json({ ok: true, service: "translate-proxy" }, cors);
+
+    try {
+      const body = await request.json();
+      const engine  = body.engine;
+      const text    = String(body.text || "").slice(0, MAX_TEXT_LEN);
+      const source  = String(body.source || "").toLowerCase();
+      const target  = String(body.target || "").toLowerCase();
+      const context = String(body.context || "").slice(0, 1000);
+      const clientKey = request.headers.get("X-Api-Key") || body.key || "";
+
+      if (!text.trim()) return json({ text: "" }, cors);
+      if (source &amp;&amp; target &amp;&amp; source === target) return json({ text }, cors);
+
+      if (engine === "deepl") {
+        const key = DEEPL_KEY || clientKey;
+        if (!key) return json({ error: "no deepl key" }, cors, 400);
+        const isFree = /:fx$/.test(key.trim());
+        const host = isFree ? "https://api-free.deepl.com"
+                            : "https://api.deepl.com";
+        const p = new URLSearchParams();
+        p.append("text", text);
+        if (source) p.append("source_lang", deeplLang(source, false));
+        p.append("target_lang", deeplLang(target, true));
+        p.append("split_sentences", "nonewlines");
+        p.append("preserve_formatting", "1");
+        if (context) p.append("context", context);   // context 문자는 과금되지 않음
+        const r = await fetch(host + "/v2/translate", {
+          method: "POST",
+          headers: {
+            "Authorization": "DeepL-Auth-Key " + key.trim(),
+            "Content-Type": "application/x-www-form-urlencoded",
+          },
+          body: p.toString(),
+          signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+        });
+        if (!r.ok) {
+          const detail = await r.text().catch(() =&gt; "");
+          return json({ error: "deepl " + r.status, detail: detail.slice(0,300) },
+                      cors, r.status === 429 ? 429 : 502);
+        }
+        const j = await r.json();
+        const out = j?.translations?.[0]?.text || "";
+        if (!out) return json({ error: "deepl empty", raw: j }, cors, 502);
+        return json({ text: out }, cors);
+      }
+
+      if (engine === "google") {
+        const key = GOOGLE_KEY || clientKey;
+        if (!key) return json({ error: "no google key" }, cors, 400);
+        const payload = { q: text, target, format: "text" };
+        if (source) payload.source = source;
+        const r = await fetch(
+          "https://translation.googleapis.com/language/translate/v2?key="
+            + encodeURIComponent(key.trim()),
+          {
+            method: "POST",
+            headers: { "Content-Type": "application/json" },
+            body: JSON.stringify(payload),
+            signal: AbortSignal.timeout(UPSTREAM_TIMEOUT_MS),
+          }
+        );
+        if (!r.ok) {
+          const detail = await r.text().catch(() =&gt; "");
+          return json({ error: "google " + r.status, detail: detail.slice(0,300) },
+                      cors, r.status === 429 ? 429 : 502);
+        }
+        const j = await r.json();
+        const raw = j?.data?.translations?.[0]?.translatedText || "";
+        if (!raw) return json({ error: "google empty", raw: j }, cors, 502);
+        return json({ text: decodeEntities(raw) }, cors);
+      }
+
+      return json({ error: "unknown engine" }, cors, 400);
+    } catch (e) {
+      const msg = String(e);
+      const to = /Timeout|abort/i.test(msg);
+      return json({ error: to ? "upstream timeout" : msg }, cors, to ? 504 : 500);
+    }
+  },
+};
+
+function deeplLang(c, isTarget) {
+  const m = { ko: "KO", en: isTarget ? "EN-GB" : "EN", cs: "CS" };
+  return m[c] || c.toUpperCase();
+}
+function decodeEntities(s) {
+  return s.replace(/&amp;lt;/g, "&lt;").replace(/&amp;gt;/g, "&gt;")
+          .replace(/&amp;quot;/g, '"').replace(/&amp;#39;|&amp;apos;/g, "'")
+          .replace(/&amp;nbsp;/g, " ")
+          .replace(/&amp;#(\d+);/g, (_, d) =&gt; String.fromCodePoint(+d))
+          .replace(/&amp;#x([0-9a-f]+);/gi, (_, h) =&gt; String.fromCodePoint(parseInt(h,16)))
+          .replace(/&amp;amp;/g, "&amp;");   // 반드시 마지막
+}
+function json(obj, cors, status = 200) {
+  return new Response(JSON.stringify(obj), {
+    status,
+    headers: { ...cors, "Content-Type": "application/json",
+               "Cache-Control": "no-store" },
+  });
+}</pre>
+    <button class="copybtn" id="copyWorker">📋 Worker 코드 복사</button>
+
+    <div class="note">✅ 이 앱은 프록시로 <code>POST { engine, text, source, target, context, key }</code> 형식으로 요청합니다. 위 코드는 이 형식을 그대로 처리하므로 <b>수정 없이 바로 동작</b>합니다.</div>
+
+    <h3>🌐 HTTPS 배포 (음성인식 필수 조건)</h3>
+    <details class="guide">
+      <summary>🟣 GitHub Pages</summary>
+      <div class="body">
+        <div class="step"><div class="n">1</div><div class="t">저장소에 <b>index.html</b> 업로드</div></div>
+        <div class="step"><div class="n">2</div><div class="t"><b>Settings → Pages → Branch: main → Save</b></div></div>
+        <div class="step"><div class="n">3</div><div class="t"><code>https://아이디.github.io/저장소</code> 접속 → 홈 화면 설치 권장</div></div>
+        <div class="note warn">GitHub Pages는 https라 음성인식 OK. 단, 크로스오리진 API는 CORS가 걸리므로 <b>위 Cloudflare 프록시</b>를 함께 쓰세요.</div>
+      </div>
+    </details>
+    <details class="guide">
+      <summary>🟢 Netlify Drop / 🔵 Vercel / 🟠 Cloudflare Pages</summary>
+      <div class="body">
+        <div class="step"><div class="n">1</div><div class="t"><span class="link">app.netlify.com/drop</span>에 index.html 드래그&드롭 (30초)</div></div>
+        <div class="step"><div class="n">2</div><div class="t">또는 vercel.com / pages.cloudflare.com에서 업로드 → https 주소 자동 생성</div></div>
+      </div>
+    </details>
+
+    <div class="note warn"><b>알려진 한계 (숨김 없이 고지)</b><br>
+    Web Speech API는 무음 타임아웃 값 자체를 웹에서 제어할 수 없습니다. 이 앱은 타임아웃을 <b>없앤 것이 아니라 사용자에게 보이지 않게 감춘 것</b>입니다. 또한 세션 재시작 시 기기에 따라 인식 시작음(비프)이 날 수 있으며 웹에서 끌 방법이 없습니다. 장시간·다화자 회의에서 완전한 무중단 인식이 필요하면 MediaRecorder + 스트리밍 ASR(WebSocket) 방식으로 가야 합니다.</div>
+
+    <button class="close" id="closeDeploy">닫기</button>
+  </div>
+</div>
+
+<!-- 기록/저장 모달 -->
+<div class="modal" id="recordModal">
+  <div class="sheet">
+    <h2>📋 회의 기록 · 저장</h2>
+    <p id="recStat">-</p>
+    <h3>📝 자동 요약</h3>
+    <div class="summary" id="summaryBox">기록이 없습니다.</div>
+    <button class="exportbtn" id="regenSummary" style="text-align:center;margin-top:6px;"><b>🔄 요약 다시 생성</b></button>
+
+    <h3>💾 내보내기</h3>
+    <button class="exportbtn" id="expCsv">📊 <b>Excel(CSV)</b> 전체 기록 다운로드</button>
+    <button class="exportbtn" id="expCsvSum">📊 <b>Excel(CSV)</b> 요약본 다운로드</button>
+    <button class="exportbtn" id="expPdf">📄 <b>PDF</b> 전체+요약 저장 (인쇄→PDF)</button>
+    <button class="exportbtn" id="expTxt">📃 <b>텍스트(.txt)</b> 다운로드</button>
+    <button class="close" id="closeRec">닫기</button>
+  </div>
+</div>
+
+<div id="toast"></div>
+
+<script>
+/* ================= ★ 화면 높이 보정 (하단 잘림 수정) ================= */
+function fixViewportHeight(){
+  const h = (window.visualViewport && window.visualViewport.height) || window.innerHeight;
+  document.documentElement.style.setProperty('--vh', (h/100)+'px');
+}
+fixViewportHeight();
+window.addEventListener('resize', fixViewportHeight);
+window.addEventListener('orientationchange', ()=>setTimeout(fixViewportHeight,300));
+if(window.visualViewport){
+  window.visualViewport.addEventListener('resize', fixViewportHeight);
+  window.visualViewport.addEventListener('scroll', fixViewportHeight);
+}
+window.addEventListener('scroll', fixViewportHeight, {passive:true});
+
+/* ================= 튜닝 상수 ================= */
+const CFG = {
+  SILENCE_FLUSH_MS : 1000,  // 무음 이만큼 지나면 문장 확정 (설정에서 조절)
+  HARD_FLUSH_CHARS : 180,   // 이보다 길어지면 강제 확정
+  PREVIEW_THROTTLE : 450,   // 미리보기 번역 최소 간격
+  PREVIEW_MIN_CHARS: 4,
+  RESTART_DELAY_MS : 120,   // 세션 재시작 지연 (0이면 InvalidStateError 빈발)
+  WATCHDOG_MS      : 3000,  // 좀비 세션 감시 주기
+  DEAD_AIR_MS      : 20000, // 살아있다는데 무이벤트 → 강제 재기동
+  CACHE_MAX        : 400,
+  DEDUP_WINDOW     : 4000,
+  CONTEXT_CHARS    : 220
+};
+
+/* ================= 상태 ================= */
+const S = {
+  tts:true, wake:false, big:false, glossary:true, glossaryHint:true,
+  dedup:true, duck:true, preview:true, fs:17, recording:false,
+  engine:'free', deeplKey:'', googleKey:'',
+  proxyUrl:'', useProxy:false,
+  silenceMs:CFG.SILENCE_FLUSH_MS, hardChars:CFG.HARD_FLUSH_CHARS
+};
+const $ = id => document.getElementById(id);
+const log = $('log');
+let history = [];
+let wakeLock = null, deferredPrompt = null;
+
+let lastFlushed = '', lastFlushTime = 0;
+let contextBuf = [];
+
+const ENGINE_LABEL={free:'🌐 무료',deepl:'⚡ DeepL',google:'🔵 Google'};
+
+/* ================= 두코바니 폐수처리 계통 용어집 ================= */
+const TERMS = [
+  ["WC","냉각수 계통","cooling water system","chladicí vodní systém"],
+  ["ST","증기 계통","steam system","parní systém"],
+  ["WW","폐수처리 계통","wastewater treatment system","systém čištění odpadních vod"],
+  ["BS","붕산 계통","boric acid system","systém kyseliny borité"],
+  ["BT","폐수처리 처리 계통","waste treatment system","systém úpravy odpadu"],
+  ["WS","급수 계통","water supply system","systém zásobování vodou"],
+  ["두코바니","두코바니","Dukovany","Dukovany"],
+  ["원자력발전소","원자력발전소","nuclear power plant","jaderná elektrárna"],
+  ["폐수처리장","폐수처리장","wastewater treatment plant","čistírna odpadních vod"],
+  ["침전조","침전조","settling tank / clarifier","usazovací nádrž"],
+  ["응집조","응집조","coagulation tank","koagulační nádrž"],
+  ["중화조","중화조","neutralization tank","neutralizační nádrž"],
+  ["집수조","집수조","collection sump","sběrná jímka"],
+  ["저류조","저류조","retention basin","retenční nádrž"],
+  ["농축조","농축조","thickener","zahušťovač"],
+  ["여과기","여과기","filter","filtr"],
+  ["이온교환수지","이온교환수지","ion exchange resin","ionexová pryskyřice"],
+  ["역삼투","역삼투","reverse osmosis","reverzní osmóza"],
+  ["탈염","탈염","demineralization","demineralizace"],
+  ["증발기","증발기","evaporator","odparka"],
+  ["블로다운","블로다운","blowdown","odluh"],
+  ["냉각탑","냉각탑","cooling tower","chladicí věž"],
+  ["펌프","펌프","pump","čerpadlo"],
+  ["밸브","밸브","valve","ventil"],
+  ["배관","배관","piping","potrubí"],
+  ["열교환기","열교환기","heat exchanger","výměník tepla"],
+  ["탱크","탱크","tank","nádrž"],
+  ["교반기","교반기","agitator / mixer","míchadlo"],
+  ["송풍기","송풍기","blower","dmychadlo"],
+  ["방사성폐수","방사성폐수","radioactive wastewater","radioaktivní odpadní vody"],
+  ["붕산","붕산","boric acid","kyselina boritá"],
+  ["부유물질","부유물질(SS)","suspended solids","nerozpuštěné látky"],
+  ["화학적산소요구량","화학적산소요구량(COD)","chemical oxygen demand","chemická spotřeba kyslíku"],
+  ["생물학적산소요구량","생물학적산소요구량(BOD)","biochemical oxygen demand","biochemická spotřeba kyslíku"],
+  ["전기전도도","전기전도도","conductivity","vodivost"],
+  ["탁도","탁도","turbidity","zákal"],
+  ["수소이온농도","pH","pH","pH"],
+  ["슬러지","슬러지","sludge","kal"],
+  ["약품주입","약품주입","chemical dosing","dávkování chemikálií"],
+  ["응집제","응집제","coagulant","koagulant"],
+  ["소석회","소석회","hydrated lime","hašené vápno"],
+  ["가성소다","가성소다","caustic soda","louh sodný"],
+  ["황산","황산","sulfuric acid","kyselina sírová"],
+  ["염소소독","염소소독","chlorine disinfection","chlorová dezinfekce"],
+  ["유량","유량","flow rate","průtok"],
+  ["수위","수위","water level","hladina"],
+  ["압력","압력","pressure","tlak"],
+  ["온도","온도","temperature","teplota"],
+  ["농도","농도","concentration","koncentrace"],
+  ["방류","방류","discharge","vypouštění"],
+  ["배출기준","배출기준","discharge limit","emisní limit"],
+  ["샘플링","샘플링","sampling","odběr vzorků"],
+  ["모니터링","모니터링","monitoring","monitorování"],
+  ["운전","운전","operation","provoz"],
+  ["정비","정비","maintenance","údržba"],
+  ["점검","점검","inspection","kontrola"],
+  ["시운전","시운전","commissioning","uvádění do provozu"],
+  ["설계","설계","design","návrh"],
+  ["도면","도면","drawing","výkres"],
+  ["사양서","사양서","specification","specifikace"],
+  ["계장","계장","instrumentation","měření a regulace"],
+  ["제어반","제어반","control panel","řídicí panel"],
+  ["센서","센서","sensor","senzor"],
+  ["경보","경보","alarm","alarm"],
+  ["인터록","인터록","interlock","blokování"],
+  ["안전","안전","safety","bezpečnost"],
+  ["방사선","방사선","radiation","záření"],
+  ["오염","오염","contamination","kontaminace"],
+  ["제염","제염","decontamination","dekontaminace"],
+  ["차폐","차폐","shielding","stínění"],
+  ["폐기물","폐기물","waste","odpad"],
+  ["고체폐기물","고체폐기물","solid waste","pevný odpad"],
+  ["액체폐기물","액체폐기물","liquid waste","kapalný odpad"],
+  ["회의","회의","meeting","schůzka / jednání"],
+  ["일정","일정","schedule","harmonogram"],
+  ["납기","납기","delivery date","termín dodání"],
+  ["계약","계약","contract","smlouva"],
+  ["승인","승인","approval","schválení"],
+  ["검토","검토","review","přezkoumání"],
+  ["문서","문서","document","dokument"]
+];
+const LANG_IDX={ko:1,en:2,cs:3};
+
+/* ★ 수정: escapeReg 가 깨져 있어 정규식 이스케이프가 동작하지 않았음 */
+function escapeReg(s){ return String(s).replace(/[.*+?^${}()|[\]\\]/g,'\\$&'); }
+function stripParen(s){ return String(s).replace(/\s*[\(（].*?[\)）]/g,'').trim(); }
+
+/* ★ 수정: \b 는 한글·체코어에 동작하지 않음 → ASCII 단어에만 경계 적용 */
+function termRegex(word, flags){
+  const e = escapeReg(word);
+  const asciiStart = /^[A-Za-z0-9]/.test(word);
+  const asciiEnd   = /[A-Za-z0-9]$/.test(word);
+  return new RegExp((asciiStart?'\\b':'') + e + (asciiEnd?'\\b':''), flags);
+}
+
+function buildGlossaryMap(){
+  const map={ko:{},en:{},cs:{}};
+  TERMS.forEach(([code,ko,en,cs])=>{
+    map.ko[stripParen(ko)]=ko; map.en[stripParen(en)]=en; map.cs[stripParen(cs)]=cs;
+    map.ko[code]=code; map.en[code]=code; map.cs[code]=code;
+  });
+  return map;
+}
+const GMAP = buildGlossaryMap();
+
+function findGlossaryHints(srcText, srcLangCode, toCode){
+  const si=LANG_IDX[srcLangCode], ti=LANG_IDX[toCode];
+  if(!si||!ti) return [];
+  const hints=[];
+  TERMS.forEach(t=>{
+    const srcWord=stripParen(t[si]), tgtWord=t[ti];
+    if(!srcWord||!tgtWord) return;
+    if(termRegex(srcWord,'i').test(srcText)) hints.push({src:srcWord,tgt:tgtWord});
+  });
+  return hints;
+}
+
+function applyGlossaryStrict(text,to){
+  let out=text, hit=false;
+  const dict=GMAP[to]; if(!dict) return {text,hit};
+  Object.keys(dict).sort((a,b)=>b.length-a.length).forEach(k=>{
+    if(!k||k.length<2) return;
+    const next=out.replace(termRegex(k,'gi'),dict[k]);
+    if(next!==out){ hit=true; out=next; }
+  });
+  return {text:out,hit};
+}
+
+/* ================= 유틸 ================= */
+function toast(m){const t=$('toast');t.textContent=m;t.classList.add('show');
+  clearTimeout(t._t);t._t=setTimeout(()=>t.classList.remove('show'),2600);}
+function setStatus(state){
+  const d=$('statusDot');
+  d.classList.toggle('on', state==='live');
+  d.classList.toggle('duck', state==='duck');
+}
+function langName(code){return {ko:'한국어','ko-KR':'한국어',cs:'체코어','cs-CZ':'체코어',en:'영어','en-US':'영어'}[code]||code;}
+function normText(s){ return String(s).toLowerCase().replace(/[\s.,!?;:'"·…]+/g,'').trim(); }
+function trunc(s,n){ s=String(s); return s.length>n?s.slice(0,n)+'…':s; }
+
+/* =========================================================================
+   ★★ 누적형 인식 결과 병합 (같은 말 4~6회 반복 문제의 진짜 해결책) ★★
+
+   안드로이드 음성인식기는 results[0], results[1], results[2] … 에
+   "델타"가 아니라 "지금까지의 전체 문장"을 매번 다시 담아 보냅니다.
+     results[0] = "나는"
+     results[1] = "나는 오늘"
+     results[2] = "나는 오늘 공룡"
+   따라서 인덱스로 새 결과만 골라 이어붙이면 문장이 계단식으로 중복됩니다.
+   → 인덱스가 아니라 "단어 겹침"으로 병합해야 합니다.
+   ========================================================================= */
+function words(s){
+  return String(s||'').replace(/\s+/g,' ').trim().split(' ').filter(Boolean);
+}
+
+/* base 의 꼬리와 inc 의 머리가 겹치면 겹친 만큼만 이어붙임.
+   base=[나는],           inc=[나는,오늘]        → [나는,오늘]        (누적형)
+   base=[나는,오늘],      inc=[공룡,대박]        → [나는,오늘,공룡,대박] (델타형)
+   두 방식 모두 안전하게 처리됨 */
+function mergeWords(base, inc){
+  if(!base.length) return inc.slice();
+  if(!inc.length)  return base.slice();
+  const max=Math.min(base.length, inc.length);
+  for(let k=max;k>0;k--){
+    let ok=true;
+    for(let j=0;j<k;j++){ if(base[base.length-k+j]!==inc[j]){ ok=false; break; } }
+    if(ok) return base.concat(inc.slice(k));
+  }
+  return base.concat(inc);
+}
+
+/* 세션 재시작 직후 이전 세션 마지막 문장이 통째로 재전달되는 것을 제거 */
+function stripLeadingOverlap(tail, inc){
+  const max=Math.min(tail.length, inc.length);
+  for(let k=max;k>0;k--){
+    let ok=true;
+    for(let j=0;j<k;j++){ if(tail[tail.length-k+j]!==inc[j]){ ok=false; break; } }
+    if(ok) return inc.slice(k);
+  }
+  return inc;
+}
+
+/* 최종 안전망: 연속 반복 블록 축약
+   "A B C A B C A B C" → "A B C"
+   오탐을 줄이려고 블록 길이별로 최소 반복 횟수를 다르게 둠 */
+function collapseRepeats(w){
+  let out=w.slice();
+  for(let n=Math.floor(out.length/2); n>=1; n--){
+    let i=0;
+    while(i+n<=out.length){
+      const blk=out.slice(i,i+n).join('\u0001');
+      let reps=1;
+      while(i+(reps+1)*n<=out.length &&
+            out.slice(i+reps*n,i+(reps+1)*n).join('\u0001')===blk) reps++;
+      const minReps = (n>=3)?2 : (n===2)?3 : 4;
+      if(reps>=minReps) out.splice(i+n,(reps-1)*n);
+      i+=n;
+    }
+  }
+  return out;
+}
+
+/* =========================================================================
+   번역 계층 — 캐시 + 미리보기 요청 취소 + 폴백
+   ========================================================================= */
+const trCache = new Map();
+let previewCtrl = null;
+
+function cacheKey(eng,src,to,text){ return eng+'|'+src+'|'+to+'|'+text; }
+
+async function translate(text, from, to, opts){
+  opts = opts || {};
+  const src = from.split('-')[0];
+  if(src===to) return {text, glossaryHit:false, engine:S.engine};
+
+  const ck = cacheKey(S.engine, src, to, text);
+  if(!opts.noCache && trCache.has(ck)){
+    const c = trCache.get(ck);
+    return {text:c, glossaryHit:false, engine:S.engine, cached:true};
+  }
+
+  const hints = S.glossaryHint ? findGlossaryHints(text, src, to) : [];
+  let out='', usedEngine=S.engine, ok=false;
+
+  try{
+    if(S.engine==='deepl' && (S.deeplKey || S.useProxy)){
+      out=await callDeepL(text,src,to,hints,opts.signal); ok=true;
+    }else if(S.engine==='google' && (S.googleKey || S.useProxy)){
+      out=await callGoogle(text,src,to,opts.signal); ok=true;
+    }else{
+      out=await translateFree(text,src,to,opts.signal); usedEngine='free'; ok=true;
+    }
+  }catch(e){
+    if(e && e.name==='AbortError') throw e;          // 미리보기 취소는 그대로 전파
+    if(opts.noFallback) throw e;
+    try{ out=await translateFree(text,src,to); usedEngine='free'; ok=true;
+      toast('선택 엔진 오류 → 무료 엔진 대체'); }
+    catch(_){ out='⚠︎ (번역 실패 — 원문 표시)\n'+text; usedEngine='none'; }
+  }
+
+  let hit=false;
+  if(ok && S.glossary && usedEngine!=='none'){
+    const res=applyGlossaryStrict(out,to); out=res.text; hit=res.hit;
+  }
+  if(ok && usedEngine!=='none'){
+    if(trCache.size>CFG.CACHE_MAX) trCache.clear();
+    trCache.set(ck,out);
+  }
+  return {text:out, glossaryHit:hit, engine:usedEngine};
+}
+
+function withTimeout(ms, external){
+  const ctrl=new AbortController();
+  const tid=setTimeout(()=>ctrl.abort(),ms);
+  if(external) external.addEventListener('abort',()=>ctrl.abort(),{once:true});
+  return {signal:ctrl.signal, done:()=>clearTimeout(tid)};
+}
+
+async function translateFree(text,src,to,ext){
+  const url=`https://api.mymemory.translated.net/get?q=${encodeURIComponent(text)}&langpair=${src}|${to}`;
+  const t=withTimeout(8000,ext);
+  try{
+    const r=await fetch(url,{signal:t.signal});
+    const j=await r.json();
+    const out=j?.responseData?.translatedText||'';
+    if(!out || /MYMEMORY WARNING|QUOTA/i.test(out)) throw new Error('free-fail');
+    return out;
+  } finally { t.done(); }
+}
+
+function deeplLangCode(c,isTarget){
+  const m={ko:'KO',en:isTarget?'EN-GB':'EN',cs:'CS'};
+  return m[c]||c.toUpperCase();
+}
+
+function buildContext(hints){
+  const parts=[];
+  if(hints && hints.length) parts.push(hints.map(h=>h.src+'='+h.tgt).join('; '));
+  if(contextBuf.length) parts.push(contextBuf.join(' ').slice(-CFG.CONTEXT_CHARS));
+  return parts.join(' | ');
+}
+
+async function callDeepL(text,src,to,hints,ext){
+  const ctx=buildContext(hints);
+  if(S.useProxy && S.proxyUrl) return await proxyCall('deepl',text,src,to,ctx,S.deeplKey,ext);
+
+  const isFree=/:fx$/.test(S.deeplKey.trim());
+  const host=isFree?'https://api-free.deepl.com':'https://api.deepl.com';
+  const body=new URLSearchParams();
+  body.append('text',text);
+  body.append('source_lang',deeplLangCode(src,false));
+  body.append('target_lang',deeplLangCode(to,true));
+  body.append('split_sentences','nonewlines');
+  if(ctx) body.append('context',ctx);
+  const t=withTimeout(9000,ext);
+  try{
+    const r=await fetch(host+'/v2/translate',{
+      method:'POST',
+      headers:{'Authorization':'DeepL-Auth-Key '+S.deeplKey.trim(),'Content-Type':'application/x-www-form-urlencoded'},
+      body: body.toString(), signal:t.signal
+    });
+    if(!r.ok) throw new Error('deepl-http-'+r.status);
+    const j=await r.json();
+    const out=j?.translations?.[0]?.text;
+    if(!out) throw new Error('deepl-empty');
+    return out;
+  } finally { t.done(); }
+}
+
+async function callGoogle(text,src,to,ext){
+  if(S.useProxy && S.proxyUrl) return await proxyCall('google',text,src,to,'',S.googleKey,ext);
+  const url='https://translation.googleapis.com/language/translate/v2?key='+encodeURIComponent(S.googleKey.trim());
+  const t=withTimeout(9000,ext);
+  try{
+    const r=await fetch(url,{
+      method:'POST', headers:{'Content-Type':'application/json'},
+      body:JSON.stringify({q:text,source:src,target:to,format:'text'}), signal:t.signal
+    });
+    if(!r.ok) throw new Error('google-http-'+r.status);
+    const j=await r.json();
+    const out=j?.data?.translations?.[0]?.translatedText;
+    if(!out) throw new Error('google-empty');
+    const ta=document.createElement('textarea'); ta.innerHTML=out; return ta.value;
+  } finally { t.done(); }
+}
+
+async function proxyCall(engine,text,src,to,context,key,ext){
+  const base=S.proxyUrl.replace(/\/+$/,'');
+  const t=withTimeout(10000,ext);
+  try{
+    const r=await fetch(base,{
+      method:'POST',
+      headers:{'Content-Type':'application/json', 'X-Api-Key': (key||'').trim()},
+      body:JSON.stringify({engine,text,source:src,target:to,context,key:(key||'').trim()}),
+      signal:t.signal
+    });
+    if(!r.ok){ let d=''; try{d=(await r.json()).error||'';}catch(_){} throw new Error('proxy-'+r.status+(d?':'+d:'')); }
+    const j=await r.json();
+    if(j.error) throw new Error('proxy:'+j.error);
+    if(!j.text) throw new Error('proxy-empty');
+    return j.text;
+  } finally { t.done(); }
+}
+
+/* =========================================================================
+   TTS — 큐 방식 + 재생 중 마이크 차단(되먹임 루프 차단)
+   ========================================================================= */
+let ttsDepth = 0;
+function speak(text, lang){
+  if(!S.tts || !window.speechSynthesis) return;
+  const clean=String(text).replace(/⚠︎.*/,'').trim();
+  if(!clean) return;
+  let u;
+  try{ u=new SpeechSynthesisUtterance(clean); }catch(e){ return; }
+  u.lang=lang; u.rate=1;
+  ttsDepth++;
+  if(S.duck && ttsDepth===1){ stt.mute(true); setStatus('duck'); }
+  const done=()=>{
+    ttsDepth=Math.max(0,ttsDepth-1);
+    if(S.duck && ttsDepth===0) setTimeout(()=>{ stt.mute(false); }, 250);
+  };
+  u.onend=done; u.onerror=done;
+  try{ speechSynthesis.speak(u); }catch(e){ done(); }
+}
+
+/* =========================================================================
+   ★ 연속 음성인식 엔진
+   설계: onend / isFinal 은 "발화 종료"가 아니라 "엔드포인터 타임아웃"이다.
+        → 세션 종료 시 번역을 확정하지 않고 버퍼를 유지한 채 재시작만 한다.
+        → 확정은 무음타이머 / 문장부호 / 최대길이로만 판단한다.
+   ========================================================================= */
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+
+class ContinuousSTT {
+  constructor(h){
+    this.h = h;                 // {onPartial, onSegment, onState}
+    this.running=false; this.muted=false; this.alive=false; this.restarting=false;
+    this.rec=null; this.lang='ko-KR';
+    this.pending=''; this.interim='';
+    this.sessionFinal=[];       // 현재 세션의 확정 단어 배열 (단조 증가)
+    this.consumed=0;            // sessionFinal 중 이미 확정·번역된 단어 수
+    this.tail=[];               // 직전 flush 의 꼬리 (세션 간 중복 제거용)
+    this.lastEventAt=0; this.backoff=CFG.RESTART_DELAY_MS;
+    this.flushTimer=null;
+    setInterval(()=>this._watch(), CFG.WATCHDOG_MS);
+  }
+
+  start(lang){
+    if(!SR){ this.h.onState('음성인식 미지원 (Chrome 사용)', true); return false; }
+    this.lang=lang; this.running=true; this.muted=false;
+    this.backoff=CFG.RESTART_DELAY_MS;
+    this.pending=''; this.interim=''; this.tail=[];
+    this._begin();
+    return true;
+  }
+
+  stop(){
+    this.running=false;
+    clearTimeout(this.flushTimer);
+    this._flush();                       // 남은 버퍼는 확정하고 종료
+    if(this.rec){ try{ this.rec.onend=null; this.rec.abort(); }catch(e){} }
+    this.rec=null; this.alive=false;
+    this.h.onState('중지됨');
+  }
+
+  setLang(lang){
+    if(this.lang===lang) return;
+    this.lang=lang;
+    this.pending=''; this.interim=''; this.tail=[];
+    if(this.running && this.rec){ try{ this.rec.abort(); }catch(e){} }
+  }
+
+  mute(v){
+    this.muted=v;
+    if(v){ if(this.rec){ try{ this.rec.abort(); }catch(e){} } }
+    else if(this.running && !this.alive) this._begin();
+  }
+
+  _begin(){
+    if(!this.running || this.muted || this.alive) return;
+
+    let rec;
+    try{ rec=new SR(); }catch(e){ return; }
+    rec.lang=this.lang;
+    rec.continuous=true;          // 데스크톱에선 유효, 안드로이드에선 무시될 수 있음
+    rec.interimResults=true;
+    rec.maxAlternatives=1;
+
+    this.sessionFinal=[];         // ★ 세션 버퍼 리셋
+    this.consumed=0;
+    this.lastEventAt=Date.now();
+
+    rec.onstart=()=>{
+      this.alive=true; this.backoff=CFG.RESTART_DELAY_MS;
+      this.h.onState('live');
+    };
+
+    rec.onresult=(e)=>this._onResult(e);
+
+    rec.onerror=(e)=>{
+      const t=e.error;
+      if(t==='no-speech'||t==='aborted') return;                 // 정상 순환
+      if(t==='not-allowed'||t==='service-not-allowed'){
+        this.running=false; this.h.onState('마이크 권한 거부됨', true, 'perm'); return;
+      }
+      if(t==='audio-capture'){ this.h.onState('마이크 입력 없음 — 다른 앱이 사용 중인지 확인', true); return; }
+      if(t==='network'){ this.backoff=Math.min(this.backoff*2,4000); this.h.onState('네트워크 재연결 중…', true); return; }
+      this.h.onState('인식 오류: '+t, true);
+    };
+
+    // ★★ 여기서 절대 flush 하지 않는다 ★★
+    rec.onend=()=>{
+      this.alive=false;
+      if(this.running && !this.muted) this._restart();
+      else this.h.onState('idle');
+    };
+
+    this.rec=rec;
+    try{ rec.start(); }
+    catch(err){ this.alive=false; this._restart(); }   // InvalidStateError 등
+  }
+
+  _restart(){
+    if(this.restarting) return;
+    this.restarting=true;
+    setTimeout(()=>{
+      this.restarting=false;
+      if(this.running && !this.muted && !this.alive) this._begin();
+    }, this.backoff);
+  }
+
+  _onResult(e){
+    this.lastEventAt=Date.now();
+
+    // ★ 인덱스가 아니라 "단어 겹침"으로 병합한다.
+    //   안드로이드는 results[i] 마다 전체 문장을 다시 담아 보내므로
+    //   인덱스로 골라 이어붙이면 계단식 중복이 발생한다.
+    let fin=[], itm=[];
+    for(let i=0;i<e.results.length;i++){
+      const w=words(e.results[i][0].transcript);
+      if(e.results[i].isFinal) fin=mergeWords(fin,w);
+      else                     itm=mergeWords(itm,w);
+    }
+
+    this.sessionFinal=mergeWords(this.sessionFinal, fin);
+
+    // 세션 재시작 직후 이전 문장이 통째로 재전달되는 경우 제거
+    if(this.consumed===0 && this.tail.length){
+      this.sessionFinal=stripLeadingOverlap(this.tail, this.sessionFinal);
+    }
+
+    const pendW=this.sessionFinal.slice(this.consumed);
+    this.pending=pendW.join(' ');
+
+    const withItm=mergeWords(this.sessionFinal, itm).slice(this.consumed);
+    this.interim=withItm.slice(pendW.length).join(' ');
+
+    this.h.onPartial(this.pending, this.interim);
+
+    if(this.pending){
+      if(/[.!?。？！…]["'）)\]]?$/.test(this.pending) || this.pending.length>=S.hardChars){
+        this._flush();
+      }else{
+        this._arm();
+      }
+    }
+  }
+
+  _arm(){
+    clearTimeout(this.flushTimer);
+    this.flushTimer=setTimeout(()=>this._flush(), S.silenceMs);
+  }
+
+  _flush(){
+    clearTimeout(this.flushTimer);
+    const w=this.sessionFinal.slice(this.consumed);
+    if(!w.length) return;
+    const text=collapseRepeats(w).join(' ').trim();   // 최종 안전망
+    this.consumed=this.sessionFinal.length;
+    this.tail=this.sessionFinal.slice(-24);           // 다음 세션 중복 제거용
+    this.pending=''; this.interim='';
+    this.h.onPartial('','');
+    if(text) this.h.onSegment(text);
+  }
+
+  _watch(){
+    if(!this.running || this.muted) return;
+    const now=Date.now();
+    if(!this.alive && !this.restarting){ this._begin(); return; }      // 좀비 부활
+    if(this.alive && now-this.lastEventAt>CFG.DEAD_AIR_MS){            // 무응답 강제 재기동
+      try{ this.rec.abort(); }catch(e){}
+      this.alive=false; this._restart();
+    }
+  }
+}
+
+/* =========================================================================
+   UI 연결
+   ========================================================================= */
+let interimEl=null, previewLastAt=0, previewLastText='';
+
+function removeEmpty(){ const e=$('emptyMsg'); if(e)e.remove(); }
+function updateCount(){ $('cntBadge').textContent=history.length+'건'; }
+
+function addBubble(cls,label,text,interim){
+  const d=document.createElement('div');
+  d.className='msg '+cls+(interim?' interim':'');
+  d.innerHTML='<div class="lbl"><span></span><button class="speak">🔊</button></div><div class="orig"></div>';
+  d.querySelector('.lbl span').textContent=label;
+  d.querySelector('.orig').textContent=text||'';
+  d.querySelector('.speak').onclick=()=>speak(d.querySelector('.orig').textContent,$('srcLang').value);
+  return d;
+}
+
+function clearInterim(){ if(interimEl){ interimEl.remove(); interimEl=null; } previewLastText=''; }
+
+function onPartial(committed, interim){
+  const live=(committed+' '+interim).trim();
+  if(!live){ clearInterim(); return; }
+
+  if(!interimEl){
+    interimEl=addBubble('src', langName($('srcLang').value)+' (인식 중…)','',true);
+    log.appendChild(interimEl); removeEmpty();
+  }
+  interimEl.querySelector('.orig').textContent=live;
+  log.scrollTop=log.scrollHeight;
+
+  // 실시간 미리보기 번역 (무료 엔진은 쿼터 보호를 위해 제외)
+  if(!S.preview || S.engine==='free') return;
+  if(live.length<CFG.PREVIEW_MIN_CHARS) return;
+  if(live===previewLastText) return;
+  const now=Date.now();
+  if(now-previewLastAt<CFG.PREVIEW_THROTTLE) return;
+  previewLastAt=now; previewLastText=live;
+
+  const bubble=interimEl;
+  let tr=bubble.querySelector('.tr');
+  if(!tr){ tr=document.createElement('div'); tr.className='tr pending'; bubble.appendChild(tr); }
+
+  if(previewCtrl) previewCtrl.abort();
+  previewCtrl=new AbortController();
+
+  translate(live, $('srcLang').value, $('dstLang').value,
+            {signal:previewCtrl.signal, noFallback:true, noCache:false})
+    .then(r=>{ if(interimEl===bubble) tr.textContent=r.text; })
+    .catch(()=>{ /* 취소·타임아웃은 무시 — 곧 다음 요청이 옴 */ });
+}
+
+async function onSegment(text){
+  clearInterim();
+
+  const now=Date.now();
+  if(S.dedup){
+    const n=normText(text), p=normText(lastFlushed);
+    if(!n) return;
+    if(p && now-lastFlushTime<CFG.DEDUP_WINDOW){
+      // 완전 동일뿐 아니라 "포함" 관계도 중복으로 간주 (누적형 재전달 방어)
+      if(n===p) return;
+      if(n.length>=6 && p.includes(n)) return;
+      if(p.length>=6 && n.includes(p) && n.length < p.length*1.4) return;
+    }
+  }
+  lastFlushed=text; lastFlushTime=now;
+
+  removeEmpty();
+  const from=$('srcLang').value, to=$('dstLang').value;
+
+  // 버블은 동기적으로 추가 → 번역이 늦게 와도 발화 순서가 보존됨
+  const bubble=addBubble('src',langName(from),text,false);
+  log.appendChild(bubble);
+  const tr=document.createElement('div');
+  tr.className='tr pending';
+  tr.textContent='통역 중… ('+ENGINE_LABEL[S.engine]+(S.useProxy?' · 프록시':'')+')';
+  bubble.appendChild(tr);
+  log.scrollTop=log.scrollHeight;
+
+  // ★ 락 없음 — 이 await 동안에도 인식은 계속되고 다음 문장도 병렬 처리됨
+  const {text:translated, glossaryHit, engine}=await translate(text,from,to);
+
+  tr.className = engine==='none' ? 'tr fail' : 'tr';
+  tr.textContent=translated;
+
+  const lbl=bubble.querySelector('.lbl');
+  if(glossaryHit){ const tag=document.createElement('span'); tag.className='gtag'; tag.textContent='📘용어보정'; lbl.appendChild(tag); }
+  const etag=document.createElement('span'); etag.className='etag';
+  etag.textContent=(ENGINE_LABEL[engine]||engine)+(S.useProxy&&engine!=='free'?'·🛡️':'');
+  lbl.appendChild(etag);
+
+  contextBuf.push(text); if(contextBuf.length>3) contextBuf.shift();
+
+  const ttsLang={cs:'cs-CZ',en:'en-US',ko:'ko-KR'}[to];
+  speak(translated,ttsLang);
+
+  history.push({time:new Date().toISOString(),from:langName(from),to:langName(to),
+                src:text,dst:translated,glossary:glossaryHit,engine});
+  saveLocal(); updateCount(); log.scrollTop=log.scrollHeight; updateDiag();
+}
+
+function onState(msg,isErr,kind){
+  if(msg==='live'){ setStatus('live'); return; }
+  if(msg==='idle'||msg==='중지됨'){ setStatus('off'); if(msg==='중지됨') return; return; }
+  if(kind==='perm'){ $('perm').style.display='block'; stopRec(); updateDiag(); }
+  if(isErr) toast(msg);
+}
+
+const stt = new ContinuousSTT({onPartial, onSegment, onState});
+
+/* ================= 화면 유지 ================= */
+async function reqWake(){ try{ if('wakeLock' in navigator){ wakeLock=await navigator.wakeLock.request('screen'); } }catch(e){} }
+function relWake(){ try{wakeLock&&wakeLock.release();wakeLock=null;}catch(e){} }
+document.addEventListener('visibilitychange',()=>{
+  if(document.visibilityState==='visible'){
+    if(S.wake) reqWake();
+    if(S.recording && !stt.alive && !stt.muted) stt._begin();   // 복귀 시 자동 복구
+  }
+});
+
+/* ================= 마이크 권한 ================= */
+async function checkMicPermission(){
+  if(!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia){
+    $('perm').style.display='block'; toast('이 브라우저는 마이크를 지원하지 않습니다'); return false;
+  }
+  try{
+    const stream=await navigator.mediaDevices.getUserMedia({audio:true});
+    stream.getTracks().forEach(t=>t.stop());
+    $('perm').style.display='none'; updateDiag(); return true;
+  }catch(e){
+    $('perm').style.display='block';
+    if(e && e.name==='NotAllowedError') toast('마이크 접근 차단됨. 자물쇠→권한→마이크 허용');
+    else if(e && e.name==='NotFoundError') toast('마이크 장치를 찾을 수 없습니다');
+    else toast('마이크 권한 요청 실패: '+(e&&e.name||''));
+    updateDiag(); return false;
+  }
+}
+
+/* ================= 진단 ================= */
+async function updateDiag(){
+  const el=$('diag'); if(!el) return;
+  const lines=[];
+  const vv=(window.visualViewport&&Math.round(window.visualViewport.height))||window.innerHeight;
+  lines.push('보이는 높이: '+vv+'px (innerHeight '+window.innerHeight+') ✅ dvh 보정중');
+  lines.push('프로토콜: '+location.protocol+(location.protocol==='https:'||location.protocol==='file:'?' ✅':' ⚠️(https 필요)'));
+  lines.push('음성인식 지원: '+(SR?'✅':'❌ (Chrome 권장)'));
+  lines.push('getUserMedia: '+((navigator.mediaDevices&&navigator.mediaDevices.getUserMedia)?'✅':'❌'));
+  lines.push('세션: '+(stt.running?(stt.muted?'🔇 TTS로 차단중':(stt.alive?'✅ 활성':'♻️ 재시작중')):'⏹ 정지'));
+  lines.push('버퍼: "'+trunc(stt.pending,28)+'" ('+stt.pending.length+'자)');
+  lines.push('확정 대기: '+S.silenceMs+'ms · 강제확정 '+S.hardChars+'자');
+  lines.push('TTS 되먹임 차단: '+(S.duck?'✅ ON':'⛔ OFF (반복 위험)'));
+  lines.push('미리보기: '+(S.preview?(S.engine==='free'?'⚠️ 무료엔진에서 자동 OFF':'✅ ON'):'⛔ OFF'));
+  lines.push('중복 차단: '+(S.dedup?'✅ ON ('+(CFG.DEDUP_WINDOW/1000)+'초)':'⛔ OFF'));
+  lines.push('번역 캐시: '+trCache.size+'건');
+  lines.push('번역 엔진: '+ENGINE_LABEL[S.engine]);
+  lines.push('프록시: '+(S.useProxy&&S.proxyUrl?('✅ ON · '+S.proxyUrl.slice(0,32)+'…'):'⛔ OFF'));
+  if(S.engine==='deepl') lines.push('DeepL 키: '+(S.deeplKey?'✅ 등록됨':(S.useProxy?'프록시에 내장됨(추정)':'⛔ 미등록')));
+  if(S.engine==='google') lines.push('Google 키: '+(S.googleKey?'✅ 등록됨':(S.useProxy?'프록시에 내장됨(추정)':'⛔ 미등록')));
+  if(navigator.permissions){
+    try{ const p=await navigator.permissions.query({name:'microphone'});
+      lines.push('권한 상태: '+p.state+(p.state==='granted'?' ✅':p.state==='denied'?' ❌':' (미결정)')); }
+    catch(e){ lines.push('권한 상태: 조회불가'); }
+  }
+  lines.push('실행 모드: '+(window.matchMedia('(display-mode: standalone)').matches?'✅ PWA':'브라우저'));
+  el.textContent=lines.join('\n');
+}
+setInterval(()=>{ if($('settingsModal').classList.contains('show')) updateDiag(); }, 1500);
+
+/* ================= 녹음 시작/정지 ================= */
+async function startRec(){
+  const ok=await checkMicPermission(); if(!ok) return;
+
+  // 온디바이스 인식이 가능하면 사용 (지연·비프음·네트워크 의존 감소)
+  try{
+    if(SR && SR.available){
+      const st=await SR.available({langs:[$('srcLang').value], processLocally:true});
+      if(st!=='available' && st!=='downloading' && SR.install){
+        SR.install({langs:[$('srcLang').value], processLocally:true}).catch(()=>{});
+      }
+    }
+  }catch(e){}
+
+  lastFlushed=''; lastFlushTime=0; contextBuf=[]; clearInterim();
+  if(!stt.start($('srcLang').value)) return;
+  S.recording=true;
+  $('micBtn').classList.add('rec'); $('micBtn').textContent='⏹ 듣는 중… (탭하여 정지)';
+  if(S.wake) reqWake();
+  updateDiag();
+}
+function stopRec(){
+  S.recording=false;
+  stt.stop();
+  clearInterim();
+  $('micBtn').classList.remove('rec'); $('micBtn').textContent='🎤 말하기 시작';
+  setStatus('off'); if(!S.wake) relWake();
+  updateDiag();
+}
+
+/* ================= 저장/불러오기 ================= */
+function saveLocal(){ try{localStorage.setItem('interp_hist',JSON.stringify(history));}catch(e){} }
+function loadLocal(){
+  try{ const h=JSON.parse(localStorage.getItem('interp_hist')||'[]');
+    if(h.length){ history=h; removeEmpty();
+      h.forEach(m=>{ const b=addBubble('src',m.from,m.src,false);
+        const tr=document.createElement('div');tr.className='tr';tr.textContent=m.dst;
+        b.appendChild(tr);
+        if(m.engine){const et=document.createElement('span');et.className='etag';et.textContent=ENGINE_LABEL[m.engine]||m.engine;b.querySelector('.lbl').appendChild(et);}
+        log.appendChild(b); });
+      updateCount(); log.scrollTop=log.scrollHeight; }
+  }catch(e){}
+}
+
+/* ================= 자동 요약 ================= */
+function generateSummary(){
+  if(!history.length) return '기록이 없습니다.';
+  const total=history.length;
+  const first=new Date(history[0].time), last=new Date(history[history.length-1].time);
+  const termCount={};
+  const allText=history.map(h=>h.src+' '+h.dst).join(' ');
+  TERMS.forEach(([code,ko,en,cs])=>{
+    const cands=[code,stripParen(ko),stripParen(en),stripParen(cs)]; let c=0;
+    cands.forEach(w=>{ if(!w) return; const m=allText.match(termRegex(w,'gi')); if(m)c+=m.length; });
+    if(c>0) termCount[stripParen(ko)+' ('+code+')']=c;
+  });
+  const topTerms=Object.entries(termCount).sort((a,b)=>b[1]-a[1]).slice(0,8);
+  const dir={}; history.forEach(h=>{ const k=h.from+'→'+h.to; dir[k]=(dir[k]||0)+1; });
+  const engs={}; history.forEach(h=>{ const e=ENGINE_LABEL[h.engine]||h.engine||'-'; engs[e]=(engs[e]||0)+1; });
+
+  let out='■ 회의 요약\n';
+  out+=`• 총 발화: ${total}건\n`;
+  out+=`• 기간: ${first.toLocaleString()} ~ ${last.toLocaleTimeString()}\n`;
+  out+='• 통역 방향: '+Object.entries(dir).map(([k,v])=>`${k}(${v})`).join(', ')+'\n';
+  out+='• 사용 엔진: '+Object.entries(engs).map(([k,v])=>`${k}(${v})`).join(', ')+'\n';
+  out+='\n■ 주요 논의 용어 (빈도순)\n';
+  if(topTerms.length) topTerms.forEach(([t,c])=>{ out+=`• ${t}: ${c}회\n`; });
+  else out+='• 등록 용어 미검출\n';
+  out+='\n■ 핵심 발화 (앞/뒤 발췌)\n';
+  const picks=[]; picks.push(history[0]);
+  if(history.length>2) picks.push(history[Math.floor(history.length/2)]);
+  if(history.length>1) picks.push(history[history.length-1]);
+  picks.forEach((h,i)=>{ out+=`${i+1}) [${h.from}] ${trunc(h.src,60)}\n   → ${trunc(h.dst,60)}\n`; });
+  return out;
+}
+
+/* ================= 내보내기 ================= */
+function fname(base,ext){ return base+'_'+new Date().toISOString().slice(0,16).replace(/[:T]/g,'-')+'.'+ext; }
+function download(blob,name){ const a=document.createElement('a'); a.href=URL.createObjectURL(blob); a.download=name;
+  document.body.appendChild(a); a.click(); a.remove(); URL.revokeObjectURL(a.href); }
+function csvCell(s){ s=String(s==null?'':s).replace(/"/g,'""'); return '"'+s+'"'; }
+
+function exportCsvFull(){
+  if(!history.length){ toast('저장할 기록이 없습니다'); return; }
+  let csv='\uFEFF번호,시간,원문언어,통역언어,엔진,원문,통역결과,용어보정\n';
+  history.forEach((m,i)=>{ csv+=[i+1,new Date(m.time).toLocaleString(),m.from,m.to,ENGINE_LABEL[m.engine]||m.engine||'',csvCell(m.src),csvCell(m.dst),m.glossary?'O':''].join(',')+'\n'; });
+  download(new Blob([csv],{type:'text/csv;charset=utf-8'}),fname('통역기록_전체','csv')); toast('전체 기록 CSV 저장 완료');
+}
+function exportCsvSummary(){
+  if(!history.length){ toast('저장할 기록이 없습니다'); return; }
+  let csv='\uFEFF회의 자동요약\n\n'; generateSummary().split('\n').forEach(l=>{ csv+=csvCell(l)+'\n'; });
+  download(new Blob([csv],{type:'text/csv;charset=utf-8'}),fname('통역기록_요약','csv')); toast('요약본 CSV 저장 완료');
+}
+function exportTxt(){
+  if(!history.length){ toast('저장할 기록이 없습니다'); return; }
+  let txt='실시간 통역 회의 기록 (체코·영어·한국어)\n생성: '+new Date().toLocaleString()+'\n'+'='.repeat(46)+'\n\n';
+  txt+=generateSummary()+'\n'+'='.repeat(46)+'\n\n■ 전체 기록\n\n';
+  history.forEach((m,i)=>{ txt+=`[${i+1}] ${new Date(m.time).toLocaleTimeString()} (${m.from}→${m.to}) [${ENGINE_LABEL[m.engine]||m.engine||''}]${m.glossary?' 📘':''}\n  원문: ${m.src}\n  통역: ${m.dst}\n\n`; });
+  download(new Blob([txt],{type:'text/plain;charset=utf-8'}),fname('통역기록','txt')); toast('텍스트 저장 완료');
+}
+function esc(s){ return String(s).replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;'); }
+function exportPdf(){
+  if(!history.length){ toast('저장할 기록이 없습니다'); return; }
+  const sum=esc(generateSummary());
+  let rows='';
+  history.forEach((m,i)=>{ rows+=`<tr><td>${i+1}</td><td>${new Date(m.time).toLocaleTimeString()}</td><td>${m.from}→${m.to}</td><td>${ENGINE_LABEL[m.engine]||m.engine||''}</td><td>${esc(m.src)}</td><td>${esc(m.dst)}${m.glossary?' 📘':''}</td></tr>`; });
+  const html=`<!DOCTYPE html><html lang="ko"><head><meta charset="UTF-8"><title>통역 회의 기록</title>
+  <style>body{font-family:-apple-system,"Noto Sans KR",sans-serif;padding:24px;color:#111;}
+  h1{font-size:20px;} h2{font-size:15px;border-bottom:2px solid #333;padding-bottom:4px;margin-top:24px;}
+  pre{background:#f5f5f5;padding:14px;border-radius:8px;white-space:pre-wrap;font-size:12px;line-height:1.7;}
+  table{width:100%;border-collapse:collapse;font-size:11px;margin-top:8px;}
+  th,td{border:1px solid #ccc;padding:6px;text-align:left;vertical-align:top;}
+  th{background:#eee;} .meta{color:#666;font-size:12px;} @media print{button{display:none;}}</style></head><body>
+  <h1>🎙️ 실시간 통역 회의 기록</h1>
+  <p class="meta">생성: ${new Date().toLocaleString()} · 총 ${history.length}건 · 두코바니 폐수처리 용어 보정</p>
+  <button onclick="window.print()" style="padding:10px 18px;background:#2f81f7;color:#fff;border:none;border-radius:8px;font-size:14px;cursor:pointer;">🖨️ PDF로 저장 / 인쇄</button>
+  <h2>📝 자동 요약</h2><pre>${sum}</pre>
+  <h2>📋 전체 기록</h2>
+  <table><thead><tr><th>#</th><th>시간</th><th>방향</th><th>엔진</th><th>원문</th><th>통역결과</th></tr></thead><tbody>${rows}</tbody></table>
+  <script>setTimeout(function(){window.print();},500);<\/script></body></html>`;
+  const w=window.open('','_blank');
+  if(!w){ toast('팝업이 차단되었습니다. 팝업 허용 후 재시도'); return; }
+  w.document.write(html); w.document.close(); toast('인쇄 창에서 "PDF로 저장"을 선택하세요');
+}
+
+/* ================= 엔진 키 / 프록시 테스트 ================= */
+async function testDeepL(){
+  S.deeplKey=$('deeplKey').value.trim(); saveSettings();
+  const st=$('deeplStat');
+  if(!S.deeplKey && !(S.useProxy&&S.proxyUrl)){ st.className='keystat err'; st.textContent='키를 입력하거나 프록시를 켜세요'; return; }
+  st.className='keystat'; st.textContent='테스트 중…';
+  try{ const out=await callDeepL('cooling water system','en','cs',[]);
+    st.className='keystat ok'; st.textContent='✅ 정상'+(S.useProxy?'(프록시)':'')+' · 예시: '+out; }
+  catch(e){ st.className='keystat err'; st.textContent='❌ 실패 ('+e.message+'). 프록시 사용 권장(CORS 회피)'; }
+  updateDiag();
+}
+async function testGoogle(){
+  S.googleKey=$('googleKey').value.trim(); saveSettings();
+  const st=$('googleStat');
+  if(!S.googleKey && !(S.useProxy&&S.proxyUrl)){ st.className='keystat err'; st.textContent='키를 입력하거나 프록시를 켜세요'; return; }
+  st.className='keystat'; st.textContent='테스트 중…';
+  try{ const out=await callGoogle('cooling water system','en','cs');
+    st.className='keystat ok'; st.textContent='✅ 정상'+(S.useProxy?'(프록시)':'')+' · 예시: '+out; }
+  catch(e){ st.className='keystat err'; st.textContent='❌ 실패 ('+e.message+')'; }
+  updateDiag();
+}
+async function testProxy(){
+  S.proxyUrl=$('proxyUrl').value.trim(); saveSettings();
+  const st=$('proxyStat');
+  if(!S.proxyUrl){ st.className='keystat err'; st.textContent='프록시 URL을 입력하세요'; return; }
+  st.className='keystat'; st.textContent='연결 테스트 중…';
+  try{
+    const base=S.proxyUrl.replace(/\/+$/,'');
+    const r=await fetch(base,{method:'GET'});
+    const j=await r.json().catch(()=>({}));
+    if(j.ok){ st.className='keystat ok'; st.textContent='✅ 프록시 연결 정상 ('+(j.service||'ok')+')'; }
+    else { st.className='keystat ok'; st.textContent='✅ 응답 수신 (헬스체크 형식은 다르나 연결됨)'; }
+  }catch(e){ st.className='keystat err'; st.textContent='❌ 연결 실패 ('+e.message+'). URL/배포 상태 확인'; }
+  updateDiag();
+}
+
+/* ================= 엔진 선택 UI ================= */
+function syncEngineUI(){
+  document.querySelectorAll('input[name=eng]').forEach(r=>{ r.checked=(r.value===S.engine); });
+  document.querySelectorAll('.engcard').forEach(c=>{ c.classList.toggle('sel',c.dataset.eng===S.engine); });
+  $('engBadge').textContent=ENGINE_LABEL[S.engine]+(S.useProxy&&S.engine!=='free'?'🛡️':'');
+  $('deeplKey').value=S.deeplKey||''; $('googleKey').value=S.googleKey||'';
+  $('proxyUrl').value=S.proxyUrl||'';
+}
+document.querySelectorAll('input[name=eng]').forEach(r=>{
+  r.onchange=()=>{
+    if(r.value==='deepl' && !$('deeplKey').value.trim() && !(S.useProxy&&S.proxyUrl)) toast('DeepL 키 입력 또는 프록시를 켜세요');
+    if(r.value==='google' && !$('googleKey').value.trim() && !(S.useProxy&&S.proxyUrl)) toast('Google 키 입력 또는 프록시를 켜세요');
+    S.engine=r.value; trCache.clear(); saveSettings(); syncEngineUI(); updateDiag();
+    toast('번역 엔진: '+ENGINE_LABEL[S.engine]);
+  };
+});
+document.querySelectorAll('.engcard').forEach(c=>{
+  c.querySelector('.top').onclick=(e)=>{ if(e.target.tagName!=='INPUT'){ const rb=c.querySelector('input[name=eng]'); rb.checked=true; rb.onchange(); } };
+});
+$('deeplKey').oninput=()=>{ S.deeplKey=$('deeplKey').value.trim(); saveSettings(); };
+$('googleKey').oninput=()=>{ S.googleKey=$('googleKey').value.trim(); saveSettings(); };
+$('proxyUrl').oninput=()=>{ S.proxyUrl=$('proxyUrl').value.trim(); saveSettings(); updateDiag(); };
+$('deeplShow').onclick=()=>{ const i=$('deeplKey'); i.type=i.type==='password'?'text':'password'; };
+$('googleShow').onclick=()=>{ const i=$('googleKey'); i.type=i.type==='password'?'text':'password'; };
+$('deeplTest').onclick=testDeepL;
+$('googleTest').onclick=testGoogle;
+$('proxyTest').onclick=testProxy;
+$('proxyClear').onclick=()=>{ S.proxyUrl=''; $('proxyUrl').value=''; saveSettings(); updateDiag(); toast('프록시 URL 삭제'); };
+
+$('copyWorker').onclick=async ()=>{
+  const code=$('workerCode').textContent;
+  try{ await navigator.clipboard.writeText(code); toast('✅ Worker 코드 복사됨'); }
+  catch(e){
+    const ta=document.createElement('textarea'); ta.value=code; document.body.appendChild(ta);
+    ta.select(); try{document.execCommand('copy'); toast('✅ Worker 코드 복사됨');}catch(_){toast('복사 실패 — 수동 선택');}
+    ta.remove();
+  }
+};
+
+/* ================= 이벤트 ================= */
+$('micBtn').onclick=()=>{ S.recording?stopRec():startRec(); };
+$('permBtn').onclick=async ()=>{ await checkMicPermission(); };
+$('testMicBtn').onclick=async ()=>{ const ok=await checkMicPermission(); toast(ok?'✅ 마이크 권한 정상 (스트림 즉시 해제됨)':'❌ 권한 필요'); updateDiag(); };
+$('engBadge').onclick=()=>{ $('settingsModal').classList.add('show'); updateDiag(); };
+
+$('swapBtn').onclick=()=>{
+  const src=$('srcLang'), dst=$('dstLang');
+  const dstT=dst.value; const srcT=src.selectedOptions[0].dataset.t;
+  [...src.options].forEach(o=>{ if(o.dataset.t===dstT) src.value=o.value; });
+  [...dst.options].forEach(o=>{ if(o.value===srcT) dst.value=o.value; });
+  lastFlushed=''; lastFlushTime=0; contextBuf=[]; clearInterim();
+  stt.setLang(src.value);
+  toast('언어 방향 변경: '+langName(src.value)+' → '+langName(dst.value));
+};
+$('srcLang').onchange=()=>{
+  lastFlushed=''; contextBuf=[]; clearInterim();
+  stt.setLang($('srcLang').value);
+};
+$('dstLang').onchange=()=>{ trCache.clear(); contextBuf=[]; };
+
+$('clearBtn').onclick=()=>{
+  if(confirm('대화 기록을 모두 지울까요?')){
+    history=[]; saveLocal(); lastFlushed=''; lastFlushTime=0; contextBuf=[]; trCache.clear();
+    clearInterim();
+    log.innerHTML='<div class="empty" id="emptyMsg">🎙️ 말하기 버튼을 눌러 시작하세요.</div>'; updateCount();
+  }
+};
+
+$('previewBtn').onclick=()=>{ S.preview=!S.preview; syncUI(); saveSettings(); toast(S.preview?'👁 미리보기 ON':'미리보기 OFF'); };
+$('ttsBtn').onclick=()=>{ S.tts=!S.tts; syncUI(); saveSettings(); };
+$('wakeBtn').onclick=()=>{ S.wake=!S.wake; S.wake?reqWake():relWake(); syncUI(); saveSettings(); };
+$('bigBtn').onclick=()=>{ S.big=!S.big; S.fs=S.big?24:17; applyFs(); syncUI(); saveSettings(); };
+$('recordBtn').onclick=openRecord;
+$('deployBtn').onclick=()=>{ $('deployModal').classList.add('show'); };
+
+function openRecord(){
+  $('recStat').textContent=`총 ${history.length}건 저장됨 · 자동 로컬 저장 활성`;
+  $('summaryBox').textContent=generateSummary(); $('recordModal').classList.add('show');
+}
+$('closeRec').onclick=()=>$('recordModal').classList.remove('show');
+$('closeDeploy').onclick=()=>$('deployModal').classList.remove('show');
+$('regenSummary').onclick=()=>{ $('summaryBox').textContent=generateSummary(); toast('요약 재생성'); };
+$('expCsv').onclick=exportCsvFull;
+$('expCsvSum').onclick=exportCsvSummary;
+$('expPdf').onclick=exportPdf;
+$('expTxt').onclick=exportTxt;
+
+$('settingsBtn').onclick=()=>{ $('settingsModal').classList.add('show'); updateDiag(); };
+$('closeSet').onclick=()=>$('settingsModal').classList.remove('show');
+document.querySelectorAll('.toggle').forEach(t=>{
+  t.onclick=()=>{ const k=t.dataset.s; S[k]=!S[k]; t.classList.toggle('on',S[k]);
+    if(k==='wake') S.wake?reqWake():relWake();
+    if(k==='big'){ S.fs=S.big?24:17; applyFs(); }
+    if(k==='useProxy'){ trCache.clear(); syncEngineUI(); toast(S.useProxy?'🛡️ 프록시 경유 ON':'프록시 OFF'); }
+    if(k==='duck' && !S.duck) toast('⚠️ 되먹임 차단 OFF — 스피커 사용 시 반복 통역 위험');
+    syncUI(); saveSettings(); updateDiag(); };
+});
+$('fsRange').oninput=e=>{ S.fs=+e.target.value; applyFs(); saveSettings(); };
+$('silRange').oninput=e=>{ S.silenceMs=+e.target.value; $('silLbl').textContent=S.silenceMs+'ms'; saveSettings(); };
+$('hardRange').oninput=e=>{ S.hardChars=+e.target.value; $('hardLbl').textContent=S.hardChars+'자'; saveSettings(); };
+
+function applyFs(){ document.documentElement.style.setProperty('--fs',S.fs+'px'); $('fsRange').value=S.fs; }
+function syncUI(){
+  document.querySelectorAll('.toggle').forEach(t=>t.classList.toggle('on',!!S[t.dataset.s]));
+  $('previewBtn').classList.toggle('active',S.preview);
+  $('ttsBtn').classList.toggle('active',S.tts);
+  $('wakeBtn').classList.toggle('active',S.wake);
+  $('bigBtn').classList.toggle('active',S.big);
+  $('silRange').value=S.silenceMs; $('silLbl').textContent=S.silenceMs+'ms';
+  $('hardRange').value=S.hardChars; $('hardLbl').textContent=S.hardChars+'자';
+  applyFs();
+  $('glossaryCount').textContent=`등록 용어 ${TERMS.length}개 (한/영/체코 3방향)`;
+  syncEngineUI();
+}
+function saveSettings(){ try{localStorage.setItem('interp_set',JSON.stringify({
+  tts:S.tts,wake:S.wake,big:S.big,glossary:S.glossary,glossaryHint:S.glossaryHint,
+  dedup:S.dedup,duck:S.duck,preview:S.preview,fs:S.fs,
+  silenceMs:S.silenceMs,hardChars:S.hardChars,
+  engine:S.engine,deeplKey:S.deeplKey,googleKey:S.googleKey,
+  proxyUrl:S.proxyUrl,useProxy:S.useProxy}));}catch(e){} }
+function loadSettings(){ try{ const s=JSON.parse(localStorage.getItem('interp_set')||'{}'); Object.assign(S,s); }catch(e){} }
+
+/* ================= PWA ================= */
+function setupPWA(){
+  const icon='data:image/svg+xml,'+encodeURIComponent(
+    `<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 512 512"><rect width="512" height="512" rx="110" fill="#2f81f7"/><text x="256" y="360" font-size="280" text-anchor="middle">🎙️</text></svg>`);
+  const manifest={
+    name:"실시간 통역 (연속 스트리밍 수정판)", short_name:"통역앱",
+    description:"체코·영어·한국어 실시간 통역 · 연속 인식 · DeepL/Google + Cloudflare 프록시",
+    start_url:".", scope:".", display:"standalone",
+    background_color:"#0d1117", theme_color:"#0d1117", orientation:"portrait",
+    icons:[{src:icon,sizes:"192x192",type:"image/svg+xml",purpose:"any maskable"},
+           {src:icon,sizes:"512x512",type:"image/svg+xml",purpose:"any maskable"}]
+  };
+  const mBlob=new Blob([JSON.stringify(manifest)],{type:'application/manifest+json'});
+  const mLink=document.createElement('link'); mLink.rel='manifest'; mLink.href=URL.createObjectURL(mBlob);
+  document.head.appendChild(mLink);
+
+  if('serviceWorker' in navigator){
+    const swCode=`
+      const CACHE='interp-pwa-v6';
+      self.addEventListener('install',e=>{ self.skipWaiting(); });
+      self.addEventListener('activate',e=>{ e.waitUntil(clients.claim()); });
+      self.addEventListener('fetch',e=>{
+        const req=e.request;
+        if(req.method!=='GET'){ return; }
+        const u=new URL(req.url);
+        if(/deepl\\.com|googleapis\\.com|mymemory|workers\\.dev/i.test(u.host)){ return; }
+        e.respondWith(caches.open(CACHE).then(cache=>cache.match(req).then(cached=>{
+          const net=fetch(req).then(res=>{ if(res&&res.status===200&&req.url.startsWith('http')){ try{cache.put(req,res.clone());}catch(_){} } return res; }).catch(()=>cached);
+          return cached||net;
+        })));
+      });`;
+    const swBlob=new Blob([swCode],{type:'text/javascript'});
+    navigator.serviceWorker.register(URL.createObjectURL(swBlob)).catch(()=>{});
+    if(navigator.serviceWorker.controller===null){
+      navigator.serviceWorker.ready.then(()=>{ try{ caches.open('interp-pwa-v6').then(c=>c.add(location.href).catch(()=>{})); }catch(_){} });
+    }
+  }
+
+  window.addEventListener('beforeinstallprompt',(e)=>{ e.preventDefault(); deferredPrompt=e;
+    if(!localStorage.getItem('install_dismiss')) $('install').style.display='flex'; });
+  $('installBtn').onclick=async ()=>{
+    if(deferredPrompt){ deferredPrompt.prompt(); await deferredPrompt.userChoice; deferredPrompt=null; $('install').style.display='none'; }
+    else{ toast('브라우저 메뉴 → "홈 화면에 추가"를 선택하세요'); }
+  };
+  $('installClose').onclick=()=>{ $('install').style.display='none'; localStorage.setItem('install_dismiss','1'); };
+  window.addEventListener('appinstalled',()=>{ $('install').style.display='none'; toast('✅ 홈 화면에 설치되었습니다'); });
+}
+
+/* ================= 초기화 ================= */
+loadSettings(); syncUI(); loadLocal(); updateCount(); setupPWA(); updateDiag();
+fixViewportHeight();
+
+if(location.protocol!=='https:' && location.hostname!=='localhost' && location.protocol!=='file:'){
+  toast('⚠︎ 음성 기능은 HTTPS에서만 동작합니다 · 📖배포 참고');
+}
+if(navigator.permissions){
+  navigator.permissions.query({name:'microphone'}).then(p=>{
+    if(p.state==='denied'){ $('perm').style.display='block'; }
+    p.onchange=()=>{ updateDiag(); if(p.state==='granted') $('perm').style.display='none'; if(p.state==='denied') $('perm').style.display='block'; };
+  }).catch(()=>{});
+}
+window.addEventListener('beforeunload',()=>{ try{ stt.stop(); }catch(e){} });
+</script>
+</body>
+</html>
