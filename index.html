@@ -66,6 +66,7 @@
   .msg .gtag{display:inline-block;font-size:10px;color:var(--warn);margin-left:6px;}
   .msg .etag{display:inline-block;font-size:9px;color:var(--sub);margin-left:6px;
     border:1px solid var(--line);border-radius:10px;padding:1px 5px;}
+  .msg .pron{font-size:calc(var(--fs,17px) - 2px);color:#e3b341;margin-top:4px;line-height:1.4;}
   .interim{opacity:.62;border-style:dashed;}
   .interim .orig{font-style:italic;}
   .speak{background:none;border:none;color:var(--sub);font-size:14px;cursor:pointer;}
@@ -74,6 +75,12 @@
 
   footer{background:var(--panel);border-top:1px solid var(--line);padding:8px 12px;flex:none;
     padding-bottom:calc(8px + env(safe-area-inset-bottom));}
+  .typebar{display:none;gap:8px;margin-bottom:8px;}
+  .typebar.show{display:flex;}
+  .typebar input{flex:1;min-width:0;background:var(--bg);color:var(--txt);
+    border:1px solid var(--line);border-radius:12px;padding:12px;font-size:15px;}
+  .typebar button{width:56px;border:none;border-radius:12px;background:var(--accent);
+    color:#fff;font-size:19px;font-weight:700;}
   .row{display:flex;gap:8px;align-items:center;}
   .mic{flex:1;height:54px;border:none;border-radius:14px;font-size:16px;font-weight:700;
     color:#fff;background:var(--accent2);transition:.15s;}
@@ -106,6 +113,35 @@
     border-radius:20px;font-size:13px;opacity:0;transition:.3s;pointer-events:none;z-index:99;
     max-width:90%;text-align:center;}
   #toast.show{opacity:1;}
+
+  /* ===== 이중언어 자막 화면 ===== */
+  #subtitle{position:fixed;inset:0;z-index:80;background:#05070a;display:none;
+    flex-direction:column;padding-top:env(safe-area-inset-top);
+    padding-bottom:env(safe-area-inset-bottom);}
+  #subtitle.show{display:flex;}
+  #subtitle .pane{flex:1 1 50%;min-height:0;display:flex;flex-direction:column;
+    padding:14px 16px;overflow:hidden;}
+  #subtitle .pane.top{border-bottom:2px solid #1f2937;background:#0b1220;}
+  #subtitle .pane .plbl{font-size:11px;letter-spacing:.08em;text-transform:uppercase;
+    color:var(--sub);flex:none;margin-bottom:6px;display:flex;justify-content:space-between;}
+  #subtitle .pane .body{flex:1 1 auto;min-height:0;overflow-y:auto;
+    display:flex;flex-direction:column;justify-content:flex-end;gap:6px;}
+  #subtitle .done{font-size:calc(var(--fs,17px) * 1.45);line-height:1.35;font-weight:600;
+    white-space:pre-wrap;word-break:break-word;}
+  #subtitle .live{font-size:calc(var(--fs,17px) * 1.3);line-height:1.35;
+    opacity:.55;font-style:italic;white-space:pre-wrap;word-break:break-word;}
+  #subtitle .pane.top .done{color:#e6edf3;}
+  #subtitle .pane.bot .done{color:#7fb2ff;}
+  #subtitle .pane.flip{transform:rotate(180deg);}
+  #subtitle .pronline{flex:none;font-size:calc(var(--fs,17px) * 1.0);color:#e3b341;
+    margin-top:8px;white-space:pre-wrap;word-break:break-word;}
+  #subbar{flex:none;display:flex;gap:6px;padding:8px 12px;background:var(--panel);
+    border-top:1px solid var(--line);}
+  #subbar button{flex:1;background:var(--panel2);border:1px solid var(--line);color:var(--txt);
+    border-radius:10px;padding:11px 4px;font-size:12px;}
+  #subbar button.on{border-color:var(--accent);color:var(--accent);}
+  #subbar button.stop{background:var(--danger);border-color:var(--danger);color:#fff;font-weight:700;}
+  #subbar button.go{background:var(--accent2);border-color:var(--accent2);color:#fff;font-weight:700;}
 
   .modal{position:fixed;inset:0;background:#000a;display:none;align-items:center;
     justify-content:center;z-index:50;padding:16px;}
@@ -241,17 +277,22 @@
 </div>
 
 <footer>
+  <div class="typebar" id="typebar">
+    <input id="typeIn" placeholder="번역할 문장을 입력… (Enter로 전송)" autocomplete="off">
+    <button id="typeSend">➤</button>
+  </div>
   <div class="row">
     <button class="iconbtn" id="settingsBtn" title="설정">⚙️</button>
     <button class="mic" id="micBtn">🎤 말하기 시작</button>
+    <button class="iconbtn" id="typeBtn" title="타이핑 번역">⌨️</button>
     <button class="iconbtn" id="clearBtn" title="지우기">🗑️</button>
   </div>
   <div class="toolrow">
-    <button class="tool" id="previewBtn">👁 미리보기</button>
+    <button class="tool" id="subBtn">🖥 자막화면</button>
     <button class="tool" id="ttsBtn">🔊 음성출력</button>
+    <button class="tool" id="previewBtn">👁 미리보기</button>
     <button class="tool" id="wakeBtn">💡 화면유지</button>
     <button class="tool" id="recordBtn">📋 기록</button>
-    <button class="tool" id="deployBtn">📖 배포</button>
     <button class="tool" id="bigBtn">🔠 큰글씨</button>
   </div>
 </footer>
@@ -269,9 +310,18 @@
     <div class="sliderlbl"><span>최대 누적 길이 (강제 확정)</span><b id="hardLbl">180자</b></div>
     <input type="range" class="slider" id="hardRange" min="60" max="400" step="20" value="180">
 
-    <div class="kv" style="margin-top:10px"><span>🔇 음성출력 중 마이크 차단<small>끄면 스피커 소리를 다시 인식해 무한 반복이 발생합니다</small></span><button class="toggle" data-s="duck"></button></div>
+    <h3>🔊 음성출력 방식 (실시간성 ↔ 되먹임 방지)</h3>
+    <div class="note info">같은 기기의 <b>스피커로 소리를 내면서 마이크로 듣는 것</b>은 물리적으로 되먹임을 피할 수 없습니다. 아래 세 방식 중 상황에 맞는 것을 고르세요.</div>
+    <div class="kv"><span>🔊 통역 결과 음성 읽기<small>끄면 <b>자막 모드</b> — 마이크가 절대 꺼지지 않아 유실 0. 대화가 이어지는 회의에 권장</small></span><button class="toggle" data-s="tts"></button></div>
+    <div class="kv"><span>🎧 이어폰 모드<small>켜면 음성출력 중에도 <b>계속 듣습니다</b>. 이어폰·헤드셋 필수. 스피커로 쓰면 반복 발생</small></span><button class="toggle" data-s="duckOff"></button></div>
+    <div class="kv"><span>⏸ 말이 멈출 때까지 음성출력 대기<small>스피커 모드에서 상대가 말하는 동안 재생을 미뤄 유실을 최소화</small></span><button class="toggle" data-s="ttsGap"></button></div>
+    <div class="sliderlbl"><span>음성출력 속도 (빠를수록 공백이 짧음)</span><b id="rateLbl">1.15×</b></div>
+    <input type="range" class="slider" id="rateRange" min="0.9" max="1.8" step="0.05" value="1.15">
+
+    <h3>🧩 기타 인식 옵션</h3>
     <div class="kv"><span>👁 실시간 미리보기 번역<small>말하는 도중 임시 번역 표시 (API 사용량 증가)</small></span><button class="toggle" data-s="preview"></button></div>
     <div class="kv"><span>🚫 중복 문장 자동 차단</span><button class="toggle" data-s="dedup"></button></div>
+    <div class="kv"><span>🗣 한글 발음 자막<small>영어·체코어 통역문 아래에 한글 발음 표기. 체코어는 정확도가 높고 영어는 근사치입니다</small></span><button class="toggle" data-s="pron"></button></div>
     <div class="note info">이 앱은 안드로이드가 3~5초마다 인식 세션을 강제 종료해도 <b>버퍼를 유지한 채 즉시 세션을 재시작</b>합니다. 따라서 세션 종료는 문장의 끝이 아니며, 문장 확정은 위 무음 시간·문장부호·최대 길이로만 판단합니다.</div>
 
     <h3>🌐 번역 엔진 (기술 통역 정확도 향상)</h3>
@@ -329,7 +379,6 @@
     <div class="note warn">🔒 API 키·프록시 URL은 이 기기의 <b>브라우저(localStorage)에만</b> 저장됩니다. 공용 PC에서는 사용 후 삭제하세요.</div>
 
     <h3>⚙️ 기타 옵션</h3>
-    <div class="kv"><span>통역 결과 음성 읽기(TTS)</span><button class="toggle" data-s="tts"></button></div>
     <div class="kv"><span>화면 항상 켜기</span><button class="toggle" data-s="wake"></button></div>
     <div class="kv"><span>큰 자막 모드</span><button class="toggle" data-s="big"></button></div>
     <div class="kv"><span>두코바니 용어집 자동 보정</span><button class="toggle" data-s="glossary"></button></div>
@@ -345,6 +394,8 @@
     <h3>📘 등록된 전문 용어집</h3>
     <p id="glossaryCount">-</p>
     <p style="margin:0">두코바니 발전소 폐수처리 계통(WC 냉각수·ST 증기·WW 폐수·BS 붕산·BT 처리·WS 급수) 용어를 한↔영↔체코 3방향으로 자동 보정합니다.</p>
+
+    <button class="exportbtn" id="deployBtn" style="text-align:center"><b>📖 배포 가이드 · Cloudflare Worker 코드</b></button>
 
     <button class="close" id="closeSet">닫기</button>
   </div>
@@ -362,6 +413,8 @@
     안드로이드에서 <code>isFinal</code>/<code>onend</code>는 "말이 끝났다"가 아니라 <b>무음 3~5초 타임아웃</b>입니다. → 이제 세션 종료 시 <b>번역을 확정하지 않고</b> 버퍼를 유지한 채 재시작만 하며, 확정은 무음 타이머·문장부호·최대 길이로만 판단합니다.<br><br>
     <b>원인 ③ TTS 되먹임 루프</b><br>
     번역 음성이 스피커 → 마이크로 재입력되어 재인식·재번역되었습니다. → 음성 출력 중 마이크를 자동 차단합니다.<br><br>
+    <b>원인 ⑥ 인식 리비전으로 인한 반복 재발</b><br>
+    인식기는 도중에 <b>띄어쓰기·어절을 수정(리비전)</b>해 전체 문장을 다시 보냅니다 (예: "책이야 이" → "책이야이"). 단어 단위 겹침 비교는 여기서 실패해 문장이 통째로 이어붙었습니다. → 공백·문장부호를 제거한 <b>정규화 비교로 "대체/델타"를 구분</b>하고, 자막은 확정 전까지 수정하며 유지되다가 <b>실제 침묵에서만 한 번</b> 확정합니다. 확정 즉시 인식 세션을 리셋해 확정 문장의 재전달을 차단합니다.<br><br>
     <b>원인 ⑤ 누적형 인식 결과 (같은 말 4~6회 반복의 진짜 원인)</b><br>
     안드로이드는 <code>results[0]="나는"</code>, <code>results[1]="나는 오늘"</code>, <code>results[2]="나는 오늘 공룡"</code> 처럼 <b>매번 전체 문장을 다시</b> 담아 보냅니다. 인덱스 기준으로 새 결과만 이어붙이면 계단식으로 중복됩니다. → 이제 인덱스가 아니라 <b>단어 겹침(overlap) 병합</b>으로 처리하며, 세션 간 재전달 제거와 반복 블록 축약 안전망을 함께 적용합니다.<br><br>
     <b>원인 ④ 좀비 세션</b><br>
@@ -555,6 +608,24 @@ function json(obj, cors, status = 200) {
   </div>
 </div>
 
+<div id="subtitle">
+  <div class="pane top" id="subTopPane">
+    <div class="plbl"><span id="subTopLbl">원문</span><span id="subTopHint"></span></div>
+    <div class="body"><div class="done" id="subTopDone"></div><div class="live" id="subTopLive"></div></div>
+  </div>
+  <div class="pane bot" id="subBotPane">
+    <div class="plbl"><span id="subBotLbl">통역</span><span id="subBotHint"></span></div>
+    <div class="body"><div class="done" id="subBotDone"></div><div class="live" id="subBotLive"></div></div>
+    <div class="pronline" id="subBotPron"></div>
+  </div>
+  <div id="subbar">
+    <button id="subMic" class="go">🎤 시작</button>
+    <button id="subFlipBtn">🔄 상대쪽 뒤집기</button>
+    <button id="subFontBtn">🔠 크기</button>
+    <button id="subClose">✕ 닫기</button>
+  </div>
+</div>
+
 <div id="toast"></div>
 
 <script>
@@ -583,13 +654,17 @@ const CFG = {
   DEAD_AIR_MS      : 20000, // 살아있다는데 무이벤트 → 강제 재기동
   CACHE_MAX        : 400,
   DEDUP_WINDOW     : 4000,
-  CONTEXT_CHARS    : 220
+  CONTEXT_CHARS    : 220,
+  TTS_GAP_MS       : 700,   // 이만큼 조용해야 대기중인 음성출력을 재생
+  TTS_QUEUE_MAX    : 4,     // 큐가 이보다 밀리면 기다리지 않고 재생
+  UNDUCK_DELAY_MS  : 120    // 음성출력 종료 후 마이크 재개 지연
 };
 
 /* ================= 상태 ================= */
 const S = {
   tts:true, wake:false, big:false, glossary:true, glossaryHint:true,
-  dedup:true, duck:true, preview:true, fs:17, recording:false,
+  dedup:true, duck:true, ttsGap:true, ttsRate:1.15, preview:true, pron:true,
+  fs:17, recording:false,
   engine:'free', deeplKey:'', googleKey:'',
   proxyUrl:'', useProxy:false,
   silenceMs:CFG.SILENCE_FLUSH_MS, hardChars:CFG.HARD_FLUSH_CHARS
@@ -791,6 +866,47 @@ function stripLeadingOverlap(tail, inc){
 /* 최종 안전망: 연속 반복 블록 축약
    "A B C A B C A B C" → "A B C"
    오탐을 줄이려고 블록 길이별로 최소 반복 횟수를 다르게 둠 */
+/* =========================================================================
+   ★★ 리비전 허용 스냅샷 병합 (반복 재발의 진짜 원인 해결) ★★
+
+   안드로이드 인식기는 인식 도중 이미 보낸 부분의 띄어쓰기·어절을
+   수정(리비전)해서 전체 문장을 다시 보냅니다.
+     스냅샷 N   : "…두키두키라는 책이야 이 책은"
+     스냅샷 N+1 : "…두키두키라는 책이야이 책은"   <- 띄어쓰기만 바뀜
+   단어 단위 겹침 비교는 여기서 실패해 전체 문장이 통째로 이어붙습니다.
+   -> 공백·문장부호를 제거한 정규화 문자열로 "대체 / 델타"를 구분합니다.
+   ========================================================================= */
+function normJoin(w){
+  const s=Array.isArray(w)?w.join(' '):String(w||'');
+  return s.toLowerCase().replace(/[\s.,!?;:'"\u201c\u201d\u2018\u2019\u00b7\u2026]+/g,'');
+}
+function commonPrefixLen(a,b){
+  const n=Math.min(a.length,b.length); let i=0;
+  while(i<n && a[i]===b[i]) i++;
+  return i;
+}
+/* 스냅샷 병합: inc 가 base 를 다시 담은 것이면 "대체", 새 내용이면 "겹침 병합" */
+function mergeSnap(base, inc){
+  if(!base.length) return inc.slice();
+  if(!inc.length)  return base.slice();
+  const nb=normJoin(base), ni=normJoin(inc);
+  if(ni.indexOf(nb)===0) return inc.slice();     // 누적형: inc 가 전체 대체 (띄어쓰기 리비전 흡수)
+  if(nb.indexOf(ni)===0) return base.slice();    // inc 는 과거 스냅샷
+  const lcp=commonPrefixLen(nb,ni);
+  if(lcp>=4 && lcp>=Math.min(nb.length,ni.length)*0.7){
+    return (ni.length>=nb.length?inc:base).slice();   // 중간 리비전 -> 더 긴 스냅샷 채택
+  }
+  return mergeWords(base,inc);                   // 순수 델타(데스크톱) -> 단어 겹침 병합
+}
+/* 세션 경계를 넘어 이어지는 발화 결합 */
+function combineUtter(carry, sess){
+  if(!carry.length) return sess.slice();
+  if(!sess.length)  return carry.slice();
+  const nc=normJoin(carry), ns=normJoin(sess);
+  if(ns.indexOf(nc)===0) return sess.slice();    // 새 세션이 이전 내용까지 다시 인식한 경우
+  return carry.concat(stripLeadingOverlap(carry, sess));
+}
+
 function collapseRepeats(w){
   let out=w.slice();
   for(let n=Math.floor(out.length/2); n>=1; n--){
@@ -951,24 +1067,94 @@ async function proxyCall(engine,text,src,to,context,key,ext){
 }
 
 /* =========================================================================
-   TTS — 큐 방식 + 재생 중 마이크 차단(되먹임 루프 차단)
+   ★★ TTS — 대기열 + "말이 멈춘 순간에만 재생" (발화 유실 최소화) ★★
+
+   물리적 제약: 같은 기기의 스피커로 소리를 내면서 마이크로 들으면
+   반드시 되먹임(스피커→마이크→재인식)이 발생합니다. Web Speech API는
+   인식기에 오디오 스트림을 넘길 수 없어 에코제거(AEC)를 걸 방법이 없습니다.
+   그래서 아래 3가지 모드로 분리합니다.
+
+   ① 자막 모드   (tts=off)              : 마이크가 절대 안 꺼짐. 완전 실시간.
+   ② 이어폰 모드 (tts=on, duck=off)     : 물리적 분리. 마이크 안 꺼짐. 최선.
+   ③ 스피커 모드 (tts=on, duck=on)      : 되먹임 차단 필요 → 재생 중 마이크 OFF.
+        └ ttsGap=on 이면 "상대가 말을 멈춘 순간"에만 재생해 유실을 최소화.
    ========================================================================= */
-let ttsDepth = 0;
-function speak(text, lang){
+const ttsQ = [];
+let ttsBusy = false, ttsPumpTimer = null;
+
+function ttsClean(t){ return String(t).replace(/⚠︎.*/,'').trim(); }
+
+function enqueueTTS(text, lang){
   if(!S.tts || !window.speechSynthesis) return;
-  const clean=String(text).replace(/⚠︎.*/,'').trim();
+  const clean=ttsClean(text);
   if(!clean) return;
+  ttsQ.push({text:clean, lang});
+  pumpTTS();
+}
+
+function pumpTTS(){
+  clearTimeout(ttsPumpTimer);
+  if(ttsBusy || !ttsQ.length) return;
+
+  // 이어폰 모드(되먹임 차단 OFF)는 마이크를 끄지 않으므로 즉시 재생
+  if(!S.duck){ playTTS(); return; }
+
+  // 스피커 모드 + 침묵대기: 상대가 말하는 중이면 재생을 미룬다
+  if(S.ttsGap && stt.running && ttsQ.length<=CFG.TTS_QUEUE_MAX){
+    const quiet = (Date.now()-stt.lastEventAt > CFG.TTS_GAP_MS)
+                  && !stt.pending && !stt.interim;
+    if(!quiet){ ttsPumpTimer=setTimeout(pumpTTS,150); return; }
+  }
+  playTTS();
+}
+
+function playTTS(){
+  const item=ttsQ.shift();
+  if(!item) return;
+  ttsBusy=true;
+  if(S.duck){ stt.mute(true); setStatus('duck'); }
+
   let u;
-  try{ u=new SpeechSynthesisUtterance(clean); }catch(e){ return; }
-  u.lang=lang; u.rate=1;
-  ttsDepth++;
-  if(S.duck && ttsDepth===1){ stt.mute(true); setStatus('duck'); }
+  try{ u=new SpeechSynthesisUtterance(item.text); }
+  catch(e){ ttsBusy=false; return; }
+  u.lang=item.lang; u.rate=S.ttsRate;
+
+  let finished=false;
   const done=()=>{
-    ttsDepth=Math.max(0,ttsDepth-1);
-    if(S.duck && ttsDepth===0) setTimeout(()=>{ stt.mute(false); }, 250);
+    if(finished) return; finished=true;
+    ttsBusy=false;
+    // 큐에 더 있으면 음소거를 유지한 채 연속 재생 (mute 토글 반복 방지)
+    if(S.duck && !ttsQ.length){
+      setTimeout(()=>{ if(!ttsBusy && !ttsQ.length) stt.mute(false); }, CFG.UNDUCK_DELAY_MS);
+    }
+    ttsPumpTimer=setTimeout(pumpTTS,60);
   };
   u.onend=done; u.onerror=done;
+  // 일부 안드로이드에서 onend 가 유실되는 사례 대비 (대략 재생시간 + 여유)
+  setTimeout(done, Math.min(30000, 1200 + item.text.length*90/S.ttsRate));
+
   try{ speechSynthesis.speak(u); }catch(e){ done(); }
+}
+
+/* 말풍선의 🔊 버튼 — 사용자가 직접 누른 경우는 즉시 재생 */
+function speakNow(text, lang){
+  if(!window.speechSynthesis) return;
+  const clean=ttsClean(text); if(!clean) return;
+  try{
+    const u=new SpeechSynthesisUtterance(clean);
+    u.lang=lang; u.rate=S.ttsRate;
+    if(S.duck && stt.running){
+      stt.mute(true); setStatus('duck');
+      const done=()=>setTimeout(()=>stt.mute(false), CFG.UNDUCK_DELAY_MS);
+      u.onend=done; u.onerror=done;
+    }
+    speechSynthesis.speak(u);
+  }catch(e){}
+}
+
+function clearTTS(){
+  ttsQ.length=0; ttsBusy=false; clearTimeout(ttsPumpTimer);
+  try{ speechSynthesis.cancel(); }catch(e){}
 }
 
 /* =========================================================================
@@ -985,9 +1171,9 @@ class ContinuousSTT {
     this.running=false; this.muted=false; this.alive=false; this.restarting=false;
     this.rec=null; this.lang='ko-KR';
     this.pending=''; this.interim='';
-    this.sessionFinal=[];       // 현재 세션의 확정 단어 배열 (단조 증가)
-    this.consumed=0;            // sessionFinal 중 이미 확정·번역된 단어 수
-    this.tail=[];               // 직전 flush 의 꼬리 (세션 간 중복 제거용)
+    this.carryW=[];             // ★ 이전 세션에서 이어온 미확정 발화 (세션이 끊겨도 보존)
+    this.sessW=[];              // 현재 세션의 최신 스냅샷 (리비전 시 대체됨)
+    this.tail=[];               // 직전 확정 문장의 꼬리 (재전달 중복 제거용)
     this.lastEventAt=0; this.backoff=CFG.RESTART_DELAY_MS;
     this.flushTimer=null;
     setInterval(()=>this._watch(), CFG.WATCHDOG_MS);
@@ -998,6 +1184,7 @@ class ContinuousSTT {
     this.lang=lang; this.running=true; this.muted=false;
     this.backoff=CFG.RESTART_DELAY_MS;
     this.pending=''; this.interim=''; this.tail=[];
+    this.carryW=[]; this.sessW=[];
     this._begin();
     return true;
   }
@@ -1015,6 +1202,7 @@ class ContinuousSTT {
     if(this.lang===lang) return;
     this.lang=lang;
     this.pending=''; this.interim=''; this.tail=[];
+    this.carryW=[]; this.sessW=[];
     if(this.running && this.rec){ try{ this.rec.abort(); }catch(e){} }
   }
 
@@ -1034,8 +1222,8 @@ class ContinuousSTT {
     rec.interimResults=true;
     rec.maxAlternatives=1;
 
-    this.sessionFinal=[];         // ★ 세션 버퍼 리셋
-    this.consumed=0;
+    // ★ 세션 스냅샷만 리셋. carryW(이어온 발화)는 절대 지우지 않는다.
+    this.sessW=[];
     this.lastEventAt=Date.now();
 
     rec.onstart=()=>{
@@ -1056,9 +1244,11 @@ class ContinuousSTT {
       this.h.onState('인식 오류: '+t, true);
     };
 
-    // ★★ 여기서 절대 flush 하지 않는다 ★★
+    // ★★ 여기서 절대 flush 하지 않는다. 발화는 carryW 로 접어 보존한다 ★★
     rec.onend=()=>{
       this.alive=false;
+      this.carryW=combineUtter(this.carryW, this.sessW);
+      this.sessW=[];
       if(this.running && !this.muted) this._restart();
       else this.h.onState('idle');
     };
@@ -1080,34 +1270,33 @@ class ContinuousSTT {
   _onResult(e){
     this.lastEventAt=Date.now();
 
-    // ★ 인덱스가 아니라 "단어 겹침"으로 병합한다.
-    //   안드로이드는 results[i] 마다 전체 문장을 다시 담아 보내므로
-    //   인덱스로 골라 이어붙이면 계단식 중복이 발생한다.
+    // ★ 스냅샷은 "이어붙이기"가 아니라 "대체"가 기본이다.
+    //   인식기가 띄어쓰기·어절을 수정(리비전)해 전체 문장을 다시 보내므로
+    //   정규화 비교(mergeSnap)로 대체/델타를 구분한다.
     let fin=[], itm=[];
     for(let i=0;i<e.results.length;i++){
       const w=words(e.results[i][0].transcript);
-      if(e.results[i].isFinal) fin=mergeWords(fin,w);
-      else                     itm=mergeWords(itm,w);
+      if(e.results[i].isFinal) fin=mergeSnap(fin,w);
+      else                     itm=mergeSnap(itm,w);
     }
 
-    this.sessionFinal=mergeWords(this.sessionFinal, fin);
+    this.sessW=mergeSnap(this.sessW, fin);
 
-    // 세션 재시작 직후 이전 문장이 통째로 재전달되는 경우 제거
-    if(this.consumed===0 && this.tail.length){
-      this.sessionFinal=stripLeadingOverlap(this.tail, this.sessionFinal);
-    }
+    // 현재 발화 전체 = 이전 세션에서 이어온 부분 + 현재 세션 스냅샷
+    let utter=combineUtter(this.carryW, this.sessW);
+    if(this.tail.length) utter=stripLeadingOverlap(this.tail, utter);
 
-    const pendW=this.sessionFinal.slice(this.consumed);
-    this.pending=pendW.join(' ');
-
-    const withItm=mergeWords(this.sessionFinal, itm).slice(this.consumed);
-    this.interim=withItm.slice(pendW.length).join(' ');
+    this.pending=utter.join(' ');
+    const liveW=mergeSnap(utter, itm);
+    this.interim=liveW.join(' ').slice(this.pending.length).trim();
 
     this.h.onPartial(this.pending, this.interim);
 
-    if(this.pending){
-      if(/[.!?。？！…]["'）)\]]?$/.test(this.pending) || this.pending.length>=S.hardChars){
-        this._flush();
+    if(utter.length){
+      if(this.pending.length>=S.hardChars){
+        this._flush();                                     // 안전밸브 (장문 독백)
+      }else if(/[.!?。？！…]["'）)\]]?$/.test(this.pending) && !this.interim){
+        this._flush();                                     // 문장부호 종결 + 인식 휴지
       }else{
         this._arm();
       }
@@ -1116,30 +1305,265 @@ class ContinuousSTT {
 
   _arm(){
     clearTimeout(this.flushTimer);
-    this.flushTimer=setTimeout(()=>this._flush(), S.silenceMs);
+    this.flushTimer=setTimeout(()=>{
+      // ★ 아직 인식 중(interim 진행형)이고 이벤트가 최근이면 확정을 미룬다.
+      //   "말하는 도중 확정"을 막는 핵심 조건.
+      const idle=Date.now()-this.lastEventAt >= S.silenceMs-80;
+      if(this.interim && !idle){ this._arm(); return; }
+      this._flush();
+    }, S.silenceMs);
   }
 
   _flush(){
     clearTimeout(this.flushTimer);
-    const w=this.sessionFinal.slice(this.consumed);
-    if(!w.length) return;
-    const text=collapseRepeats(w).join(' ').trim();   // 최종 안전망
-    this.consumed=this.sessionFinal.length;
-    this.tail=this.sessionFinal.slice(-24);           // 다음 세션 중복 제거용
+    let w=combineUtter(this.carryW, this.sessW);
+    if(this.tail.length) w=stripLeadingOverlap(this.tail, w);
+
+    // 인식기가 마지막 조각을 final 로 확정하지 못하고 멈춘 경우 임시 결과 구제
+    if(this.interim && Date.now()-this.lastEventAt >= S.silenceMs-80){
+      w=mergeSnap(w, words(this.interim));
+    }
+    if(!w.length){ this.pending=''; this.interim=''; return; }
+
+    const text=collapseRepeats(w).join(' ').trim();            // 최종 안전망
+    this.carryW=[]; this.sessW=[];
     this.pending=''; this.interim='';
+    if(text) this.tail=w.slice(-24);
     this.h.onPartial('','');
     if(text) this.h.onSegment(text);
+
+    // ★ 확정 즉시 인식 세션을 리셋한다.
+    //   누적형 인식기가 확정한 문장을 다음 스냅샷에 또 실어 보내는 것을
+    //   원천 차단 (확정 시점 = 침묵 구간이므로 유실 없음)
+    if(this.alive && this.rec){ try{ this.rec.abort(); }catch(e){} }
   }
 
   _watch(){
-    if(!this.running || this.muted) return;
+    if(!this.running) return;
     const now=Date.now();
+
+    // ★ 어떤 경로로든 확정되지 못하고 남은 버퍼를 회수 (유실 최종 안전망)
+    if((this.carryW.length||this.sessW.length) && now-this.lastEventAt > Math.max(2500, S.silenceMs*2)){
+      this._flush();
+    }
+
+    if(this.muted) return;
     if(!this.alive && !this.restarting){ this._begin(); return; }      // 좀비 부활
     if(this.alive && now-this.lastEventAt>CFG.DEAD_AIR_MS){            // 무응답 강제 재기동
       try{ this.rec.abort(); }catch(e){}
       this.alive=false; this._restart();
     }
   }
+}
+
+/* =========================================================================
+   🗣 한글 발음 표기 엔진 (영어·체코어 → 한글)
+   - 체코어: 철자가 음소적이라 규칙 변환이 정확한 편
+   - 영어: 상용어 사전(170+) 우선, 미등재 단어는 철자 규칙 근사
+   ========================================================================= */
+function hSyll(cho,jung,jong){ return String.fromCharCode(0xAC00+(cho*21+jung)*28+(jong||0)); }
+
+const PH_V={a:0,ae:1,eo:4,e:5,o:8,u:13,eu:18,i:20};
+const Y_MAP={0:2,1:3,4:6,5:7,8:12,13:17,18:17,20:20};
+const W_MAP={0:9,1:10,4:14,5:15,8:14,13:13,18:13,20:16};
+const PH_C={
+  g:{cho:0,jong:1,stop:1},  k:{cho:15,jong:1,stop:1},
+  n:{cho:2,jong:4},         d:{cho:3,jong:0,stop:1},  t:{cho:16,jong:19,stop:1},
+  r:{cho:5,jong:0},         l:{cho:5,jong:8,ll:1},
+  m:{cho:6,jong:16},        b:{cho:7,jong:17,stop:1}, p:{cho:17,jong:17,stop:1},
+  v:{cho:7,jong:0},         f:{cho:17,jong:0},
+  s:{cho:9,jong:0},         th:{cho:9,jong:0},        z:{cho:12,jong:0},
+  j:{cho:12,jong:0,defV:20},zh:{cho:12,jong:0,defV:13},
+  ch:{cho:14,jong:0,defV:20}, sh:{cho:9,jong:0,pal:1,defV:20},
+  h:{cho:18,jong:0},        ng:{}
+};
+
+function hangulFromPh(ph, allowStopCoda){
+  const toks=ph.map(p=>PH_V[p]!==undefined?{V:p}:(p==='y'||p==='w')?{G:p}:{C:p});
+  const syl=[];
+  const last=()=>syl.length?syl[syl.length-1]:null;
+  const isV=k=>toks[k]&&toks[k].V!==undefined;
+  const isG=k=>toks[k]&&toks[k].G!==undefined;
+  const isC=k=>toks[k]&&toks[k].C!==undefined;
+  const vStart=k=>isV(k)||(isG(k)&&isV(k+1));
+  let i=0;
+  while(i<toks.length){
+    if(isC(i)&&toks[i].C==='ng'){                     // ng 는 항상 받침 ㅇ
+      const p=last();
+      if(p&&!p.jong) p.jong=21; else syl.push({cho:11,jung:18,jong:21});
+      i++; continue;
+    }
+    let cho=11,g=null,def=null;
+    if(isC(i)){
+      def=PH_C[toks[i].C]||{cho:11,jong:0};
+      if(vStart(i+1)){ cho=def.cho; if(def.pal) g='y'; i++; }
+      else{
+        const p=last();
+        const nxt=isC(i+1)?toks[i+1].C:null;
+        const beforeLiquid=def.stop&&(nxt==='r'||nxt==='l');   // 파열음+유음 → 브라/프리
+        if(def.jong&&p&&!p.jong&&(allowStopCoda||!def.stop)&&!beforeLiquid){
+          p.jong=def.jong;                                     // 받침 부착 (펌→펌프)
+        }else{
+          syl.push({cho:def.cho,jung:def.defV!==undefined?def.defV:18,jong:0}); // 단독음절 (스/트/치)
+        }
+        i++; continue;
+      }
+    }
+    if(isG(i)){ g=toks[i].G; i++; }
+    if(isV(i)){
+      let j=PH_V[toks[i].V];
+      if(g==='y'&&Y_MAP[j]!==undefined) j=Y_MAP[j];
+      if(g==='w'&&W_MAP[j]!==undefined) j=W_MAP[j];
+      if(def&&def.ll){ const p2=last(); if(p2&&!p2.jong) p2.jong=8; }   // 모음 사이 l → ㄹㄹ (헬로)
+      syl.push({cho,jung:j,jong:0});
+      i++; continue;
+    }
+    if(g){ syl.push({cho:11,jung:g==='y'?20:13,jong:0}); continue; }
+    i++;
+  }
+  return syl.map(s=>hSyll(s.cho,s.jung,s.jong)).join('');
+}
+
+/* ---------- 체코어 규칙 (음소적 철자 → 정확도 높음) ---------- */
+const CS_RULES=[
+  ['ch',['h']],['ou',['o','u']],['au',['a','u']],
+  ['ě',['y','e']],['ř',['r','zh']],['č',['ch']],['š',['sh']],['ž',['zh']],
+  ['ď',['d','y']],['ť',['t','y']],['ň',['n','y']],
+  ['á',['a']],['é',['e']],['í',['i']],['ó',['o']],['ú',['u']],['ů',['u']],['ý',['i']],
+  ['qu',['k','v']],['x',['k','s']],
+  ['a',['a']],['e',['e']],['i',['i']],['y',['i']],['o',['o']],['u',['u']],
+  ['b',['b']],['c',['ch']],['d',['d']],['f',['f']],['g',['g']],['h',['h']],
+  ['j',['y']],['k',['k']],['l',['l']],['m',['m']],['n',['n']],['p',['p']],
+  ['r',['r']],['s',['s']],['t',['t']],['v',['v']],['w',['v']],['z',['z']]
+];
+function csG2P(w){
+  const out=[]; let i=0;
+  outer: while(i<w.length){
+    for(const [pat,ph] of CS_RULES){
+      if(w.startsWith(pat,i)){ out.push(...ph); i+=pat.length; continue outer; }
+    }
+    i++;
+  }
+  return out;
+}
+
+/* ---------- 영어 규칙 (근사) ---------- */
+const EN_RULES=[
+  ['ssion',['sh','eo','n']],['tion',['sh','eo','n']],['sion',['j','eo','n']],
+  ['cial',['sh','eo','l']],['tial',['sh','eo','l']],
+  ['ssure',['sh','eo']],['ture',['ch','eo']],['sure',['zh','eo']],
+  ['ough',['u']],['augh',['o']],['eigh',['e','i']],['igh',['a','i']],
+  ['tch',['ch']],['dge',['j']],
+  ['kn',['n'],1],['wr',['r'],1],['wh',['w']],['qu',['k','w']],['ck',['k']],['ph',['f']],['gh',[]],
+  ['sh',['sh']],['th',['th']],['ch',['ch']],['nk',['ng','k']],['ng',['ng']],
+  ['ee',['i']],['ea',['i']],['oo',['u']],['ou',['a','u']],['ow',['o','u']],
+  ['ai',['e','i']],['ay',['e','i']],['oi',['o','i']],['oy',['o','i']],
+  ['au',['o']],['aw',['o']],['ew',['y','u']],['ue',['u']],['ui',['u']],['ie',['i']],['oa',['o','u']],
+  ['ll',['l'],2],   // 어말 ll → ㄹ (bell→벨), 어중 ll 은 자동 ㄹㄹ
+  ['ss',['s']],['tt',['t']],['pp',['p']],['mm',['m']],['nn',['n']],['ff',['f']],
+  ['rr',['r']],['dd',['d']],['bb',['b']],['gg',['g']],['cc',['k']],['zz',['j']]
+];
+const EN_SINGLE={a:['ae'],e:['e'],i:['i'],o:['o'],u:['eo'],
+  b:['b'],d:['d'],f:['f'],h:['h'],j:['j'],k:['k'],l:['l'],m:['m'],n:['n'],
+  p:['p'],r:['r'],s:['s'],t:['t'],v:['v'],w:['w'],z:['z'],q:['k'],
+  A:['e','i'],E:['i'],I:['a','i'],O:['o','u'],U:['y','u'],L:['eu','l']};
+function enG2P(w){
+  w=w.replace(/[^a-z]/g,'');
+  w=w.replace(/([bcdfghjklmnpqrstvwxz])le$/,'$1L');                       // apple→appL
+  w=w.replace(/([aeiou])([bcdfghjklmnpqrstvz])e$/,
+    (m,v,c)=>(({a:'A',e:'E',i:'I',o:'O',u:'U'})[v])+c);                   // make→mAk (매직 e)
+  const out=[]; let i=0;
+  outer: while(i<w.length){
+    // 모음+r+(자음|끝) → r 탈락 장모음 (car→카, work→워…)
+    if('aeiou'.includes(w[i]) && w[i+1]==='r' && (i+2>=w.length || !'aeiouy'.includes(w[i+2]))){
+      out.push({a:'a',o:'o',e:'eo',i:'eo',u:'eo'}[w[i]]); i+=2; continue;
+    }
+    for(const [pat,ph,flag] of EN_RULES){
+      if(flag===1 && i!==0) continue;
+      if(flag===2 && i+pat.length!==w.length) continue;
+      if(w.startsWith(pat,i)){ out.push(...ph); i+=pat.length; continue outer; }
+    }
+    const c=w[i];
+    if(c==='c'){ out.push('eiy'.includes(w[i+1])?'s':'k'); i++; continue; }
+    if(c==='g'){ out.push('eiy'.includes(w[i+1])?'j':'g'); i++; continue; }
+    if(c==='y'){ out.push(i===0?'y':'i'); i++; continue; }
+    if(EN_SINGLE[c]) out.push(...EN_SINGLE[c]);
+    i++;
+  }
+  return out;
+}
+
+/* ---------- 영어 상용어 사전 (불규칙 발음 보정) ---------- */
+const EN_DICT={
+i:'아이',you:'유',he:'히',she:'쉬',we:'위',they:'데이',it:'잇',me:'미',us:'어스',them:'뎀',
+my:'마이',your:'유어',our:'아워',his:'히즈',her:'허',their:'데어',its:'이츠',
+the:'더',a:'어',an:'언',and:'앤드',or:'오어',but:'벗',so:'소',if:'이프',
+is:'이즈',are:'아',was:'워즈',were:'워',be:'비',been:'빈',am:'앰',being:'비잉',
+do:'두',does:'더즈',did:'디드',done:'던',have:'해브',has:'해즈',had:'해드',
+will:'윌',would:'우드',can:'캔',could:'쿠드',should:'슈드',shall:'섈',must:'머스트',may:'메이',might:'마이트',
+not:'낫',no:'노',yes:'예스',ok:'오케이',okay:'오케이',
+this:'디스',that:'댓',these:'디즈',those:'도즈',
+what:'왓',when:'웬',where:'웨어',who:'후',why:'와이',how:'하우',which:'위치',
+here:'히어',there:'데어',now:'나우',then:'덴',
+to:'투',of:'오브',in:'인',on:'온',at:'앳',by:'바이',for:'포',from:'프롬',with:'위드',
+about:'어바웃',into:'인투',over:'오버',under:'언더',between:'비트윈',through:'스루',
+please:'플리즈',thank:'생크',thanks:'생스',sorry:'쏘리',excuse:'익스큐즈',
+hello:'헬로',hi:'하이',bye:'바이',good:'굿',bad:'배드',
+very:'베리',too:'투',also:'올소',only:'온리',just:'저스트',again:'어겐',
+more:'모어',less:'레스',most:'모스트',many:'매니',much:'머치',some:'섬',any:'애니',all:'올',
+one:'원',two:'투',three:'스리',four:'포',five:'파이브',six:'식스',seven:'세븐',eight:'에이트',nine:'나인',ten:'텐',
+first:'퍼스트',second:'세컨드',third:'서드',next:'넥스트',last:'라스트',
+today:'투데이',tomorrow:'투모로',yesterday:'예스터데이',
+time:'타임',day:'데이',week:'위크',month:'먼스',year:'이어',hour:'아워',minute:'미닛',
+morning:'모닝',afternoon:'애프터눈',evening:'이브닝',night:'나이트',
+meeting:'미팅',schedule:'스케줄',plan:'플랜',work:'워크',project:'프로젝트',
+new:'뉴',old:'올드',high:'하이',low:'로우',big:'빅',small:'스몰',long:'롱',short:'쇼트',
+need:'니드',want:'원트',know:'노우',think:'싱크',see:'시',look:'룩',
+go:'고',come:'컴',make:'메이크',take:'테이크',get:'겟',give:'기브',put:'풋',
+use:'유즈',find:'파인드',tell:'텔',ask:'애스크',say:'세이',said:'세드',
+start:'스타트',stop:'스톱',open:'오픈',close:'클로즈',finish:'피니시',
+check:'체크',test:'테스트',review:'리뷰',approve:'어프루브',approval:'어프루벌',confirm:'컨펌',
+water:'워터',waste:'웨이스트',wastewater:'웨이스트워터',treatment:'트리트먼트',plant:'플랜트',
+nuclear:'뉴클리어',power:'파워',energy:'에너지',
+pump:'펌프',valve:'밸브',pipe:'파이프',piping:'파이핑',tank:'탱크',filter:'필터',
+pressure:'프레셔',temperature:'템퍼러처',level:'레벨',flow:'플로',rate:'레이트',
+sample:'샘플',sampling:'샘플링',monitor:'모니터',monitoring:'모니터링',
+inspection:'인스펙션',maintenance:'메인터넌스',operation:'오퍼레이션',
+design:'디자인',drawing:'드로잉',document:'도큐먼트',specification:'스페시피케이션',
+safety:'세이프티',radiation:'레이디에이션',chemical:'케미컬',acid:'애시드',boric:'보릭',
+steam:'스팀',cooling:'쿨링',supply:'서플라이',discharge:'디스차지',limit:'리밋',
+alarm:'알람',sensor:'센서',control:'컨트롤',panel:'패널',system:'시스템',
+equipment:'이큅먼트',material:'머티리얼',unit:'유닛',building:'빌딩',site:'사이트',area:'에어리어',
+engineer:'엔지니어',manager:'매니저',team:'팀',company:'컴퍼니',
+contract:'컨트랙트',delivery:'딜리버리',quality:'퀄리티',cost:'코스트',price:'프라이스',budget:'버짓',
+problem:'프라블럼',issue:'이슈',question:'퀘스천',answer:'앤서',
+information:'인포메이션',data:'데이터',report:'리포트',result:'리절트',number:'넘버',name:'네임',
+because:'비커즈',before:'비포',after:'애프터',during:'듀링',until:'언틸',
+same:'세임',different:'디퍼런트',important:'임포턴트',possible:'파서블',ready:'레디',
+right:'라이트',wrong:'롱',sure:'슈어',maybe:'메이비',
+book:'북',read:'리드',called:'콜드',call:'콜',characteristics:'캐릭터리스틱스',
+dinosaur:'다이너소어',since:'신스'
+};
+const EN_CONTR={"it's":'잇츠',"that's":'댓츠',"what's":'왓츠',"let's":'레츠',
+"don't":'돈트',"doesn't":'더즌트',"didn't":'디든트',"can't":'캔트',"won't":'원트',
+"wouldn't":'우든트',"couldn't":'쿠든트',"shouldn't":'슈든트',
+"isn't":'이즌트',"aren't":'안트',"wasn't":'워즌트',
+"i'm":'아임',"i'll":'아일',"i've":'아이브',"we're":'위어',"we'll":'위일',"we've":'위브',
+"you're":'유어',"you'll":'유일',"you've":'유브',"they're":'데어',
+"there's":'데어즈',"here's":'히어즈',"he's":'히즈',"she's":'쉬즈'};
+
+function toHangulPron(text,lang){
+  const out=String(text).replace(/[A-Za-z\u00C0-\u024F]+(?:'[A-Za-z]+)?/g, tok=>{
+    const lw=tok.toLowerCase();
+    try{
+      if(lang==='en'){
+        if(EN_CONTR[lw]) return EN_CONTR[lw];
+        return lw.split("'").map(p=>p?(EN_DICT[p]||hangulFromPh(enG2P(p),true)):'').join('');
+      }
+      return hangulFromPh(csG2P(lw),false);   // 체코어: 파열음 받침 금지 (크/트/프)
+    }catch(e){ return tok; }
+  });
+  return out.replace(/\s+/g,' ').trim();
 }
 
 /* =========================================================================
@@ -1156,11 +1580,15 @@ function addBubble(cls,label,text,interim){
   d.innerHTML='<div class="lbl"><span></span><button class="speak">🔊</button></div><div class="orig"></div>';
   d.querySelector('.lbl span').textContent=label;
   d.querySelector('.orig').textContent=text||'';
-  d.querySelector('.speak').onclick=()=>speak(d.querySelector('.orig').textContent,$('srcLang').value);
+  d.querySelector('.speak').onclick=()=>speakNow(d.querySelector('.orig').textContent,$('srcLang').value);
   return d;
 }
 
-function clearInterim(){ if(interimEl){ interimEl.remove(); interimEl=null; } previewLastText=''; }
+function clearInterim(){
+  if(interimEl){ interimEl.remove(); interimEl=null; }
+  previewLastText='';
+  subLiveSrc=''; subLiveDst=''; renderSub();
+}
 
 function onPartial(committed, interim){
   const live=(committed+' '+interim).trim();
@@ -1172,6 +1600,7 @@ function onPartial(committed, interim){
   }
   interimEl.querySelector('.orig').textContent=live;
   log.scrollTop=log.scrollHeight;
+  subLiveSrc=live; renderSub();
 
   // 실시간 미리보기 번역 (무료 엔진은 쿼터 보호를 위해 제외)
   if(!S.preview || S.engine==='free') return;
@@ -1190,7 +1619,7 @@ function onPartial(committed, interim){
 
   translate(live, $('srcLang').value, $('dstLang').value,
             {signal:previewCtrl.signal, noFallback:true, noCache:false})
-    .then(r=>{ if(interimEl===bubble) tr.textContent=r.text; })
+    .then(r=>{ if(interimEl===bubble){ tr.textContent=r.text; subLiveDst=r.text; renderSub(); } })
     .catch(()=>{ /* 취소·타임아웃은 무시 — 곧 다음 요청이 옴 */ });
 }
 
@@ -1222,11 +1651,25 @@ async function onSegment(text){
   bubble.appendChild(tr);
   log.scrollTop=log.scrollHeight;
 
+  const subEntry={src:text,dst:'…'};
+  subLog.push(subEntry); if(subLog.length>30) subLog.shift();
+  renderSub();
+
   // ★ 락 없음 — 이 await 동안에도 인식은 계속되고 다음 문장도 병렬 처리됨
   const {text:translated, glossaryHit, engine}=await translate(text,from,to);
 
   tr.className = engine==='none' ? 'tr fail' : 'tr';
   tr.textContent=translated;
+
+  let pron='';
+  if(S.pron && (to==='en'||to==='cs') && engine!=='none'){
+    try{ pron=toHangulPron(translated,to); }catch(e){ pron=''; }
+    if(pron && pron!==translated){
+      const pr=document.createElement('div'); pr.className='pron';
+      pr.textContent='🗣 '+pron; bubble.appendChild(pr);
+    }
+  }
+  subEntry.dst=translated; subEntry.pron=pron; renderSub();
 
   const lbl=bubble.querySelector('.lbl');
   if(glossaryHit){ const tag=document.createElement('span'); tag.className='gtag'; tag.textContent='📘용어보정'; lbl.appendChild(tag); }
@@ -1237,16 +1680,53 @@ async function onSegment(text){
   contextBuf.push(text); if(contextBuf.length>3) contextBuf.shift();
 
   const ttsLang={cs:'cs-CZ',en:'en-US',ko:'ko-KR'}[to];
-  speak(translated,ttsLang);
+  enqueueTTS(translated,ttsLang);
 
   history.push({time:new Date().toISOString(),from:langName(from),to:langName(to),
-                src:text,dst:translated,glossary:glossaryHit,engine});
+                src:text,dst:translated,pron,glossary:glossaryHit,engine});
   saveLocal(); updateCount(); log.scrollTop=log.scrollHeight; updateDiag();
 }
 
+/* =========================================================================
+   🖥 이중언어 자막 화면 — 원문/통역을 동시에 크게 표시
+   위쪽: 말하는 언어(원문) · 아래쪽: 통역 언어
+   마주 앉은 상대를 위해 한쪽 창을 180° 뒤집을 수 있음
+   ========================================================================= */
+let subOn=false;
+const subLog=[];
+let subLiveSrc='', subLiveDst='';
+
+function subLangLabels(){
+  $('subTopLbl').textContent=langName($('srcLang').value)+' · 원문';
+  $('subBotLbl').textContent=langName($('dstLang').value)+' · 통역';
+}
+function renderSub(){
+  if(!subOn) return;
+  const items=subLog.slice(-2);
+  $('subTopDone').textContent=items.map(x=>x.src).join('\n');
+  $('subBotDone').textContent=items.map(x=>x.dst).join('\n');
+  $('subTopLive').textContent=subLiveSrc;
+  $('subBotLive').textContent=subLiveDst;
+  const lastP=(S.pron&&items.length)?(items[items.length-1].pron||''):'';
+  $('subBotPron').textContent=lastP?('🗣 '+lastP):'';
+}
+function updateSubMic(){
+  const b=$('subMic'); if(!b) return;
+  b.textContent=S.recording?'⏹ 정지':'🎤 시작';
+  b.className=S.recording?'stop':'go';
+  $('subTopHint').textContent=S.recording?'● 듣는 중':'';
+}
+function openSub(){
+  subOn=true; $('subtitle').classList.add('show');
+  subLangLabels(); renderSub(); updateSubMic();
+  if(!S.tts) $('subBotHint').textContent='자막 모드';
+  reqWake();
+}
+function closeSub(){ subOn=false; $('subtitle').classList.remove('show'); if(!S.wake) relWake(); }
+
 function onState(msg,isErr,kind){
   if(msg==='live'){ setStatus('live'); return; }
-  if(msg==='idle'||msg==='중지됨'){ setStatus('off'); if(msg==='중지됨') return; return; }
+  if(msg==='idle'||msg==='중지됨'){ setStatus('off'); return; }
   if(kind==='perm'){ $('perm').style.display='block'; stopRec(); updateDiag(); }
   if(isErr) toast(msg);
 }
@@ -1293,7 +1773,10 @@ async function updateDiag(){
   lines.push('세션: '+(stt.running?(stt.muted?'🔇 TTS로 차단중':(stt.alive?'✅ 활성':'♻️ 재시작중')):'⏹ 정지'));
   lines.push('버퍼: "'+trunc(stt.pending,28)+'" ('+stt.pending.length+'자)');
   lines.push('확정 대기: '+S.silenceMs+'ms · 강제확정 '+S.hardChars+'자');
-  lines.push('TTS 되먹임 차단: '+(S.duck?'✅ ON':'⛔ OFF (반복 위험)'));
+  lines.push('음성출력 모드: '+(!S.tts?'📄 자막 모드 (마이크 유실 0)'
+                      : (!S.duck?'🎧 이어폰 모드 (마이크 유실 0)'
+                      : (S.ttsGap?'🔇 스피커+침묵대기':'🔇 스피커 즉시재생 (유실 큼)'))));
+  lines.push('TTS 대기열: '+ttsQ.length+'건 '+(ttsBusy?'· 재생중':'')+' · '+S.ttsRate.toFixed(2)+'×');
   lines.push('미리보기: '+(S.preview?(S.engine==='free'?'⚠️ 무료엔진에서 자동 OFF':'✅ ON'):'⛔ OFF'));
   lines.push('중복 차단: '+(S.dedup?'✅ ON ('+(CFG.DEDUP_WINDOW/1000)+'초)':'⛔ OFF'));
   lines.push('번역 캐시: '+trCache.size+'건');
@@ -1329,6 +1812,7 @@ async function startRec(){
   if(!stt.start($('srcLang').value)) return;
   S.recording=true;
   $('micBtn').classList.add('rec'); $('micBtn').textContent='⏹ 듣는 중… (탭하여 정지)';
+  updateSubMic();
   if(S.wake) reqWake();
   updateDiag();
 }
@@ -1337,7 +1821,8 @@ function stopRec(){
   stt.stop();
   clearInterim();
   $('micBtn').classList.remove('rec'); $('micBtn').textContent='🎤 말하기 시작';
-  setStatus('off'); if(!S.wake) relWake();
+  updateSubMic();
+  setStatus('off'); if(!S.wake && !subOn) relWake();
   updateDiag();
 }
 
@@ -1349,6 +1834,7 @@ function loadLocal(){
       h.forEach(m=>{ const b=addBubble('src',m.from,m.src,false);
         const tr=document.createElement('div');tr.className='tr';tr.textContent=m.dst;
         b.appendChild(tr);
+        if(m.pron){const pr=document.createElement('div');pr.className='pron';pr.textContent='🗣 '+m.pron;b.appendChild(pr);}
         if(m.engine){const et=document.createElement('span');et.className='etag';et.textContent=ENGINE_LABEL[m.engine]||m.engine;b.querySelector('.lbl').appendChild(et);}
         log.appendChild(b); });
       updateCount(); log.scrollTop=log.scrollHeight; }
@@ -1524,28 +2010,67 @@ $('swapBtn').onclick=()=>{
   [...dst.options].forEach(o=>{ if(o.value===srcT) dst.value=o.value; });
   lastFlushed=''; lastFlushTime=0; contextBuf=[]; clearInterim();
   stt.setLang(src.value);
+  subLog.length=0; subLangLabels(); renderSub();
   toast('언어 방향 변경: '+langName(src.value)+' → '+langName(dst.value));
 };
 $('srcLang').onchange=()=>{
   lastFlushed=''; contextBuf=[]; clearInterim();
   stt.setLang($('srcLang').value);
+  subLangLabels(); renderSub();
 };
-$('dstLang').onchange=()=>{ trCache.clear(); contextBuf=[]; };
+$('dstLang').onchange=()=>{ trCache.clear(); contextBuf=[]; subLangLabels(); };
 
 $('clearBtn').onclick=()=>{
   if(confirm('대화 기록을 모두 지울까요?')){
     history=[]; saveLocal(); lastFlushed=''; lastFlushTime=0; contextBuf=[]; trCache.clear();
-    clearInterim();
+    clearInterim(); subLog.length=0; renderSub();
     log.innerHTML='<div class="empty" id="emptyMsg">🎙️ 말하기 버튼을 눌러 시작하세요.</div>'; updateCount();
   }
 };
 
 $('previewBtn').onclick=()=>{ S.preview=!S.preview; syncUI(); saveSettings(); toast(S.preview?'👁 미리보기 ON':'미리보기 OFF'); };
-$('ttsBtn').onclick=()=>{ S.tts=!S.tts; syncUI(); saveSettings(); };
+$('ttsBtn').onclick=()=>{
+  S.tts=!S.tts;
+  if(!S.tts){ clearTTS(); if(stt.running) stt.mute(false); toast('📄 자막 모드 — 마이크가 끊기지 않습니다'); }
+  else toast('🔊 음성출력 ON');
+  syncUI(); saveSettings(); updateDiag();
+};
 $('wakeBtn').onclick=()=>{ S.wake=!S.wake; S.wake?reqWake():relWake(); syncUI(); saveSettings(); };
 $('bigBtn').onclick=()=>{ S.big=!S.big; S.fs=S.big?24:17; applyFs(); syncUI(); saveSettings(); };
 $('recordBtn').onclick=openRecord;
 $('deployBtn').onclick=()=>{ $('deployModal').classList.add('show'); };
+
+/* --- 타이핑 번역 --- */
+$('typeBtn').onclick=()=>{
+  const on=$('typebar').classList.toggle('show');
+  $('typeBtn').style.borderColor=on?'var(--accent)':'';
+  $('typeBtn').style.color=on?'var(--accent)':'';
+  if(on) setTimeout(()=>$('typeIn').focus(),60);
+};
+function sendTyped(){
+  const t=$('typeIn').value.trim(); if(!t) return;
+  $('typeIn').value='';
+  lastFlushed='';                       // 타이핑은 중복 차단 예외
+  onSegment(t);
+  $('typeIn').focus();
+}
+$('typeSend').onclick=sendTyped;
+$('typeIn').addEventListener('keydown',e=>{ if(e.key==='Enter'){ e.preventDefault(); sendTyped(); } });
+
+/* --- 자막 화면 --- */
+$('subBtn').onclick=()=>{ openSub(); if(!S.recording) startRec(); };
+$('subClose').onclick=closeSub;
+$('subMic').onclick=()=>{ S.recording?stopRec():startRec(); };
+$('subFlipBtn').onclick=()=>{
+  const p=$('subTopPane'); const on=p.classList.toggle('flip');
+  $('subFlipBtn').classList.toggle('on',on);
+  toast(on?'원문 창을 상대방 쪽으로 뒤집었습니다':'원문 창 방향 복원');
+};
+$('subFontBtn').onclick=()=>{
+  const steps=[17,22,28,34];
+  S.fs=steps[(steps.indexOf(S.fs)+1)%steps.length] || 22;
+  S.big=S.fs>=24; applyFs(); syncUI(); saveSettings();
+};
 
 function openRecord(){
   $('recStat').textContent=`총 ${history.length}건 저장됨 · 자동 로컬 저장 활성`;
@@ -1562,33 +2087,48 @@ $('expTxt').onclick=exportTxt;
 $('settingsBtn').onclick=()=>{ $('settingsModal').classList.add('show'); updateDiag(); };
 $('closeSet').onclick=()=>$('settingsModal').classList.remove('show');
 document.querySelectorAll('.toggle').forEach(t=>{
-  t.onclick=()=>{ const k=t.dataset.s; S[k]=!S[k]; t.classList.toggle('on',S[k]);
+  t.onclick=()=>{
+    const k=t.dataset.s;
+    if(k==='duckOff'){                       // 이어폰 모드 = 되먹임 차단 해제
+      S.duck=!S.duck;
+      if(!S.duck) toast('🎧 이어폰 모드 — 스피커로 쓰면 같은 말이 반복됩니다');
+      else toast('🔇 스피커 모드 — 음성출력 중 마이크가 잠시 꺼집니다');
+      if(!S.duck && stt.running) stt.mute(false);
+    }else{
+      S[k]=!S[k];
+    }
     if(k==='wake') S.wake?reqWake():relWake();
     if(k==='big'){ S.fs=S.big?24:17; applyFs(); }
+    if(k==='tts' && !S.tts){ clearTTS(); if(stt.running) stt.mute(false); toast('📄 자막 모드 — 마이크가 끊기지 않습니다'); }
     if(k==='useProxy'){ trCache.clear(); syncEngineUI(); toast(S.useProxy?'🛡️ 프록시 경유 ON':'프록시 OFF'); }
-    if(k==='duck' && !S.duck) toast('⚠️ 되먹임 차단 OFF — 스피커 사용 시 반복 통역 위험');
     syncUI(); saveSettings(); updateDiag(); };
 });
 $('fsRange').oninput=e=>{ S.fs=+e.target.value; applyFs(); saveSettings(); };
 $('silRange').oninput=e=>{ S.silenceMs=+e.target.value; $('silLbl').textContent=S.silenceMs+'ms'; saveSettings(); };
 $('hardRange').oninput=e=>{ S.hardChars=+e.target.value; $('hardLbl').textContent=S.hardChars+'자'; saveSettings(); };
+$('rateRange').oninput=e=>{ S.ttsRate=+e.target.value; $('rateLbl').textContent=S.ttsRate.toFixed(2)+'×'; saveSettings(); };
 
 function applyFs(){ document.documentElement.style.setProperty('--fs',S.fs+'px'); $('fsRange').value=S.fs; }
 function syncUI(){
-  document.querySelectorAll('.toggle').forEach(t=>t.classList.toggle('on',!!S[t.dataset.s]));
+  document.querySelectorAll('.toggle').forEach(t=>{
+    const k=t.dataset.s;
+    t.classList.toggle('on', k==='duckOff' ? !S.duck : !!S[k]);
+  });
   $('previewBtn').classList.toggle('active',S.preview);
   $('ttsBtn').classList.toggle('active',S.tts);
+  $('ttsBtn').textContent = S.tts ? '🔊 음성출력' : '📄 자막모드';
   $('wakeBtn').classList.toggle('active',S.wake);
   $('bigBtn').classList.toggle('active',S.big);
   $('silRange').value=S.silenceMs; $('silLbl').textContent=S.silenceMs+'ms';
   $('hardRange').value=S.hardChars; $('hardLbl').textContent=S.hardChars+'자';
+  $('rateRange').value=S.ttsRate;  $('rateLbl').textContent=S.ttsRate.toFixed(2)+'×';
   applyFs();
   $('glossaryCount').textContent=`등록 용어 ${TERMS.length}개 (한/영/체코 3방향)`;
   syncEngineUI();
 }
 function saveSettings(){ try{localStorage.setItem('interp_set',JSON.stringify({
   tts:S.tts,wake:S.wake,big:S.big,glossary:S.glossary,glossaryHint:S.glossaryHint,
-  dedup:S.dedup,duck:S.duck,preview:S.preview,fs:S.fs,
+  dedup:S.dedup,duck:S.duck,ttsGap:S.ttsGap,ttsRate:S.ttsRate,preview:S.preview,pron:S.pron,fs:S.fs,
   silenceMs:S.silenceMs,hardChars:S.hardChars,
   engine:S.engine,deeplKey:S.deeplKey,googleKey:S.googleKey,
   proxyUrl:S.proxyUrl,useProxy:S.useProxy}));}catch(e){} }
@@ -1643,7 +2183,7 @@ function setupPWA(){
 }
 
 /* ================= 초기화 ================= */
-loadSettings(); syncUI(); loadLocal(); updateCount(); setupPWA(); updateDiag();
+loadSettings(); syncUI(); loadLocal(); updateCount(); setupPWA(); updateDiag(); subLangLabels();
 fixViewportHeight();
 
 if(location.protocol!=='https:' && location.hostname!=='localhost' && location.protocol!=='file:'){
